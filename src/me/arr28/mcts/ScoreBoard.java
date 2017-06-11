@@ -1,6 +1,7 @@
 package me.arr28.mcts;
 
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 /**
  * A score board keeping track of the results of performing a particular action in a particular state.
@@ -12,18 +13,19 @@ public class ScoreBoard
   private static final AtomicIntegerFieldUpdater<ScoreBoard> SELECT_UPDATER =
       AtomicIntegerFieldUpdater.newUpdater(ScoreBoard.class, "mSelectCount");
 
-  private static class RewardLock {}
+  private static final AtomicLongFieldUpdater<ScoreBoard> REWARD_UPDATER =
+      AtomicLongFieldUpdater.newUpdater(ScoreBoard.class, "mTotalReward");
 
   /**
    * The number of times that the node associated with this score board has been selected.
    */
-  protected volatile int mSelectCount;
+  protected volatile int mSelectCount = 0;
 
   /**
-   * The total score from all rollouts through this node.
+   * The total score (a double) from all rollouts through this node, encoded
+   * as a long for use with AtomicLongFieldUpdater.
    */
-  protected double mTotalReward;
-  private final Object mRewardSync = new RewardLock();
+  protected volatile long mTotalReward = Double.doubleToRawLongBits(0.0);
 
   /**
    * Factory for these ScoreBoards.
@@ -74,9 +76,12 @@ public class ScoreBoard
    */
   public void reward(double xiReward)
   {
-    synchronized (mRewardSync)
+    boolean lDone = false;
+    while (!lDone)
     {
-      mTotalReward += xiReward;
+      long lCurrentValue = mTotalReward;
+      long lNewValue = Double.doubleToRawLongBits(Double.longBitsToDouble(lCurrentValue) + xiReward);
+      lDone = REWARD_UPDATER.compareAndSet(this, lCurrentValue, lNewValue);
     }
   }
 
@@ -85,7 +90,7 @@ public class ScoreBoard
    */
   public double getSelectionWeight()
   {
-    return mTotalReward / mSelectCount;
+    return getTotalReward() / mSelectCount;
   }
 
   /**
@@ -93,7 +98,12 @@ public class ScoreBoard
    */
   public final double getAverageReward()
   {
-    return mTotalReward / mSelectCount;
+    return getTotalReward() / mSelectCount;
+  }
+
+  private double getTotalReward()
+  {
+    return Double.longBitsToDouble(mTotalReward);
   }
 
   /**

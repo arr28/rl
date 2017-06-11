@@ -1,5 +1,8 @@
 package me.arr28.mcts;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReferenceArray;
+
 import me.arr28.game.GameState;
 import me.arr28.game.GameStateFactory;
 import me.arr28.pool.Pool.ObjectAllocator;
@@ -12,7 +15,8 @@ public class TreeNode
   private static final int MAX_BRANCHING_FACTOR = 100; // !! ARR Branching factor hack.
 
   private final MCTSTree mTree;
-  private final TreeNode[] mChildren = new TreeNode[MAX_BRANCHING_FACTOR];
+  private final AtomicReferenceArray<TreeNode> mChildren = new AtomicReferenceArray<>(MAX_BRANCHING_FACTOR);
+  private final TreeNode[] mChildrenShadow = new TreeNode[MAX_BRANCHING_FACTOR];
   private final GameState mGameState;
 
   /**
@@ -21,7 +25,7 @@ public class TreeNode
   public final ScoreBoard mScoreBoard;
 
   private boolean mTerminal;
-  private int mUnexpandedChildCount;
+  private AtomicInteger mUnexpandedChildCount = new AtomicInteger();
 
   /**
    * Utility class for allocating tree nodes from a Pool.
@@ -69,7 +73,7 @@ public class TreeNode
     mTree = xiTree;
     mGameState = xiGameState;
     mScoreBoard = xiScoreBoard;
-    reinitialise();
+    cacheGameStateValues();
   }
 
   /**
@@ -77,12 +81,10 @@ public class TreeNode
    */
   public void reset()
   {
-    synchronized (mChildren)
+    for (int lii = 0; lii < mChildren.length(); lii++)
     {
-      for (int lii = 0; lii < mChildren.length; lii++)
-      {
-        mChildren[lii] = null;
-      }
+      mChildren.set(lii, null);
+      mChildrenShadow[lii] = null;
     }
     mScoreBoard.reset();
   }
@@ -119,51 +121,42 @@ public class TreeNode
     GameState lChildState = lChild.getGameState();
     mGameState.copyTo(lChildState);
     lChildState.applyAction(xiAction);
-    lChild.reinitialise();
+    lChild.cacheGameStateValues();
 
     TreeNode lSavedChild = mTree.getTranspositionTable().putIfAbsent(lChildState, lChild);
     if (lSavedChild == null)
     {
-      synchronized (mChildren)
-      {
-        if (mChildren[xiAction] == null)
-        {
-          mChildren[xiAction] = lChild;
-          mUnexpandedChildCount--;
-        }
-      }
+      lSavedChild = lChild;
     }
     else
     {
-      // 2 possibilities
-      //
-      // - Another thread simultaneously expanded this child.
-      // - This is a transposition into an existing node elsewhere in the tree.
-      synchronized (mChildren)
-      {
-        if (mChildren[xiAction] == null)
-        {
-          mChildren[xiAction] = lSavedChild;
-          mUnexpandedChildCount--;
-        }
-      }
       mTree.getNodePool().free(lChild);
+      lChild = null;
+    }
+
+    if (mChildren.compareAndSet(xiAction, null, lSavedChild))
+    {
+      mChildrenShadow[xiAction] = lSavedChild;
+      mUnexpandedChildCount.decrementAndGet();
+    }
+    else
+    {
       lChild = null;
     }
 
     return lChild;
   }
 
-  private void reinitialise()
+  private void cacheGameStateValues()
   {
     mTerminal = mGameState.isTerminal();
     if (mTerminal)
     {
-      mUnexpandedChildCount = 0;
+      mUnexpandedChildCount.set(0);
     }
     else
     {
-      mUnexpandedChildCount = mGameState.getNumLegalActions();
+      mUnexpandedChildCount.set(mGameState.getNumLegalActions());
     }
   }
 
@@ -172,7 +165,7 @@ public class TreeNode
    */
   public TreeNode[] getChildren()
   {
-    return mChildren;
+    return mChildrenShadow;
   }
 
   /**
@@ -181,6 +174,6 @@ public class TreeNode
    */
   public boolean shouldStopSelection()
   {
-    return mTerminal || (mUnexpandedChildCount > 0);
+    return mTerminal || (mUnexpandedChildCount.get() > 0);
   }
 }

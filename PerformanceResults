@@ -32,3 +32,18 @@
 3 threads = 331K (202%)
 4 threads = 334K (204%)
 
+---
+
++mTotalReward likewise
+
+1 thread  = 166K
+4 threads = 321K 
+
+---
+
++AtomicReferenceArray for edges
+
+1 thread  = 123K
+2 threads = 208K (169%)
+3 threads = 246K (200%)
+4 threads = 241K
