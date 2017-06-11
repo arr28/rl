@@ -36,7 +36,7 @@ public class TestHarness
     CONNECT4, HEX, BREAKTHROUGH;
   }
 
-  private static final int NUM_THREADS = 8;
+  private static final int NUM_THREADS = 4;
   private static final int NUM_PURE_ROLLOUTS = 0; //10_000_000;
   private static final int NUM_MCTS_ITERATIONS = MCTSTree.NODE_POOL_SIZE - 1;
   private static final Policies POLICY_SET = Policies.UCT_APPROX;

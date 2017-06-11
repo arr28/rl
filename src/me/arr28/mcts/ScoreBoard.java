@@ -1,5 +1,6 @@
 package me.arr28.mcts;
 
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 /**
  * A score board keeping track of the results of performing a particular action in a particular state.
@@ -8,14 +9,15 @@ package me.arr28.mcts;
  */
 public class ScoreBoard
 {
-  private static class SelectLock {}
+  private static final AtomicIntegerFieldUpdater<ScoreBoard> SELECT_UPDATER =
+      AtomicIntegerFieldUpdater.newUpdater(ScoreBoard.class, "mSelectCount");
+
   private static class RewardLock {}
 
   /**
    * The number of times that the node associated with this score board has been selected.
    */
-  protected int mSelectCount;
-  private final Object mSelectSync = new SelectLock();
+  protected volatile int mSelectCount;
 
   /**
    * The total score from all rollouts through this node.
@@ -52,10 +54,7 @@ public class ScoreBoard
   {
     // Record the selection now, which makes this node look like a poorer choice until the result is recorded.  In a
     // multi-threaded environment, this tends to make different threads explore different parts of the tree.
-    synchronized (mSelectSync)
-    {
-      mSelectCount++;
-    }
+    SELECT_UPDATER.incrementAndGet(this);
   }
 
   /**
