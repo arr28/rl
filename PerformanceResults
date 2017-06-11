@@ -1,0 +1,26 @@
+3,000,000 iterations of C4.  Results are best of 3 trials.
+
+1 thread  = 160K
+2 threads = 230K
+4 threads = 240K
+8 threads = 245K
+
+---
+
++Pre-allocated nodes
+
+1 thread  = 185K
+2 threads = 285K
+3 threads = 325K
+4 threads = 315K
+5 threads = 315K
+
+---
+
++No Edges (just direct link to children).
+
+1 thread  = 210K
+2 threads = 334K
+3 threads = 370K
+4 threads = 361K
+5 threads = 365K
