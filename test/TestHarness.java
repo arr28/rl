@@ -189,6 +189,7 @@ public class TestHarness
     {
       mTree.warm(mIterations);
       mTree.iterate(mIterations);
+      System.out.println("Worker complete @ " + System.currentTimeMillis());
     }
   }
 }
