@@ -47,3 +47,19 @@
 2 threads = 208K (169%)
 3 threads = 246K (200%)
 4 threads = 241K
+
+---
+
+Switch to LongAdder & DoubleAdder (instead of FieldUpdater)
+
+1 thread  = 123K 
+3 threads = 215K (175%)
+
+---
+
+Better test framework
+
+Best speed for 1 thread(s) was 177559 iterations/s
+Best speed for 2 thread(s) was 271271 iterations/s (152%)
+Best speed for 3 thread(s) was 334055 iterations/s (188%)
+Best speed for 4 thread(s) was 391517 iterations/s (220%)
