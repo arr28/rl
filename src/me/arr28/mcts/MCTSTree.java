@@ -67,8 +67,6 @@ public class MCTSTree
       }
     };
 
-    // mNodePool = new CappedPool<>(new TreeNodeAllocator(this, xiGameStateFactory, xiScoreBoardFactory), NODE_POOL_SIZE);
-
     mRoot = new TreeNodeAllocator(this, xiGameStateFactory, xiScoreBoardFactory).newObject();
   }
 
@@ -95,7 +93,7 @@ public class MCTSTree
    * @param xiDummyState - a state for copying into (a performance optimization).
    * @param xiPath - an array for storing the iteration path.
    */
-  public void iterate(GameState xiDummyState, TreeNode[] xiPath)
+  private void iterate(GameState xiDummyState, TreeNode[] xiPath)
   {
     // Keep track of the path from root to leaf.
     int lPathLength = 0;

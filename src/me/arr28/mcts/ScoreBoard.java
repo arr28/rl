@@ -1,7 +1,7 @@
 package me.arr28.mcts;
 
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.DoubleAdder;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * A score board keeping track of the results of performing a particular action in a particular state.
@@ -10,22 +10,16 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
  */
 public class ScoreBoard
 {
-  private static final AtomicIntegerFieldUpdater<ScoreBoard> SELECT_UPDATER =
-      AtomicIntegerFieldUpdater.newUpdater(ScoreBoard.class, "mSelectCount");
-
-  private static final AtomicLongFieldUpdater<ScoreBoard> REWARD_UPDATER =
-      AtomicLongFieldUpdater.newUpdater(ScoreBoard.class, "mTotalReward");
-
   /**
    * The number of times that the node associated with this score board has been selected.
    */
-  protected volatile int mSelectCount = 0;
+  private final LongAdder mSelectCount = new LongAdder();
 
   /**
    * The total score (a double) from all rollouts through this node, encoded
    * as a long for use with AtomicLongFieldUpdater.
    */
-  protected volatile long mTotalReward = Double.doubleToRawLongBits(0.0);
+  private final DoubleAdder mTotalReward = new DoubleAdder();
 
   /**
    * Factory for these ScoreBoards.
@@ -56,15 +50,15 @@ public class ScoreBoard
   {
     // Record the selection now, which makes this node look like a poorer choice until the result is recorded.  In a
     // multi-threaded environment, this tends to make different threads explore different parts of the tree.
-    SELECT_UPDATER.incrementAndGet(this);
+    mSelectCount.increment();
   }
 
   /**
    * @return the number of times that this node has been selected.
    */
-  public int getSelectCount()
+  public long getSelectCount()
   {
-    return mSelectCount;
+    return mSelectCount.sum();
   }
 
   /**
@@ -76,13 +70,7 @@ public class ScoreBoard
    */
   public void reward(double xiReward)
   {
-    boolean lDone = false;
-    while (!lDone)
-    {
-      long lCurrentValue = mTotalReward;
-      long lNewValue = Double.doubleToRawLongBits(Double.longBitsToDouble(lCurrentValue) + xiReward);
-      lDone = REWARD_UPDATER.compareAndSet(this, lCurrentValue, lNewValue);
-    }
+    mTotalReward.add(xiReward);
   }
 
   /**
@@ -90,7 +78,7 @@ public class ScoreBoard
    */
   public double getSelectionWeight()
   {
-    return getTotalReward() / mSelectCount;
+    return mTotalReward.sum() / mSelectCount.sum();
   }
 
   /**
@@ -98,12 +86,7 @@ public class ScoreBoard
    */
   public final double getAverageReward()
   {
-    return getTotalReward() / mSelectCount;
-  }
-
-  private double getTotalReward()
-  {
-    return Double.longBitsToDouble(mTotalReward);
+    return mTotalReward.sum() / mSelectCount.sum();
   }
 
   /**
@@ -111,7 +94,7 @@ public class ScoreBoard
    */
   public void reset()
   {
-    mSelectCount = 0;
-    mTotalReward = 0;
+    mSelectCount.reset();
+    mTotalReward.reset();
   }
 }
