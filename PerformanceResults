@@ -63,3 +63,12 @@ Best speed for 1 thread(s) was 177559 iterations/s
 Best speed for 2 thread(s) was 271271 iterations/s (152%)
 Best speed for 3 thread(s) was 334055 iterations/s (188%)
 Best speed for 4 thread(s) was 391517 iterations/s (220%)
+
+---
+
++Set TreeNode.MAX_BRANCHING_FACTOR = 7
+
+1 thread(s) performed 244503 iterations/s (100%)
+2 thread(s) performed 349969 iterations/s (143%)
+3 thread(s) performed 461072 iterations/s (188%)
+4 thread(s) performed 497039 iterations/s (203%)

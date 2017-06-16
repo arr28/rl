@@ -155,15 +155,25 @@ public class PerformanceTest
 
   private void testFullMCTSSpeed()
   {
-    for (int lii = 1; lii <= MAX_THREADS; lii++)
+    long[] lSpeed = new long[MAX_THREADS];
+    for (int lThreads = 1; lThreads <= MAX_THREADS; lThreads++)
     {
-      System.out.println("=== Testing with " + lii + " thread(s) ===");
-      testFullMCTSSpeedNThreads(lii);
+      System.out.println("=== Testing with " + lThreads + " thread(s) ===");
+      lSpeed[lThreads - 1] = testFullMCTSSpeedNThreads(lThreads);
       System.out.println();
+    }
+
+    System.out.println("====================");
+    for (int lThreads = 1; lThreads <= MAX_THREADS; lThreads++)
+    {
+      long lThisSpeed = lSpeed[lThreads - 1];
+      System.out.println(lThreads + " thread(s) performed " +
+                         lThisSpeed + " iterations/s (" +
+                         lThisSpeed * 100 / lSpeed[0] + "%)");
     }
   }
 
-  private void testFullMCTSSpeedNThreads(int xiNumThreads)
+  private long testFullMCTSSpeedNThreads(int xiNumThreads)
   {
     int lIterationsPerThread = NUM_MCTS_ITERATIONS / xiNumThreads;
 
@@ -220,7 +230,7 @@ public class PerformanceTest
       lBestSpeed = Math.max(lBestSpeed, lTotalIterationsPerSecond);
     }
 
-    System.out.println("Best speed for " + xiNumThreads + " thread(s) was " + lBestSpeed + " iterations/s");
+    return lBestSpeed;
   }
 
   private static void dumpRootStats(int xiIteration, MCTSTree xiTree)
