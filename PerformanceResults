@@ -32,10 +32,10 @@ UCB1 Selection Policy, Simple Expand Policy, Dummy Rollout Policy, Simple Update
 
 Same code but doing a quick sanity check on C4
 
-1 thread(s) performed 218605 iterations/s (100%)
-2 thread(s) performed 405393 iterations/s (185%)
-3 thread(s) performed 531382 iterations/s (243%)
-4 thread(s) performed 561512 iterations/s (256%)
+1 thread(s) performed 217956 iterations/s (100%)
+2 thread(s) performed 382538 iterations/s (175%)
+3 thread(s) performed 577038 iterations/s (264%)
+4 thread(s) performed 686979 iterations/s (315%)
 
 6. [No improvement] Using org.eclipse.collections.impl.map.mutable.ConcurrentHashMap
 1 thread(s) performed 436017 iterations/s (100%)
