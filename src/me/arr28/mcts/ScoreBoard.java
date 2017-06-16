@@ -1,7 +1,6 @@
 package me.arr28.mcts;
 
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
-import java.util.concurrent.atomic.DoubleAdder;
 
 /**
  * A score board keeping track of the results of performing a particular action in a particular state.
@@ -13,6 +12,9 @@ public class ScoreBoard
   private static final AtomicLongFieldUpdater<ScoreBoard> SELECT_UPDATER =
       AtomicLongFieldUpdater.newUpdater(ScoreBoard.class, "mSelectCount");
 
+  private static final AtomicLongFieldUpdater<ScoreBoard> REWARD_UPDATER =
+      AtomicLongFieldUpdater.newUpdater(ScoreBoard.class, "mTotalReward");
+
   /**
    * The number of times that the node associated with this score board has been selected.
    */
@@ -22,7 +24,7 @@ public class ScoreBoard
    * The total score (a double) from all rollouts through this node, encoded
    * as a long for use with AtomicLongFieldUpdater.
    */
-  private final DoubleAdder mTotalReward = new DoubleAdder();
+  private volatile long mTotalReward = Double.doubleToLongBits(0);
 
   /**
    * Factory for these ScoreBoards.
@@ -73,7 +75,11 @@ public class ScoreBoard
    */
   public void reward(double xiReward)
   {
-    mTotalReward.add(xiReward);
+    long prev, next;
+    do {
+        prev = mTotalReward;
+        next = Double.doubleToLongBits(Double.longBitsToDouble(prev) + xiReward);
+    } while (!REWARD_UPDATER.compareAndSet(this, prev, next));
   }
 
   /**
@@ -81,7 +87,7 @@ public class ScoreBoard
    */
   public double getSelectionWeight()
   {
-    return mTotalReward.sum() / mSelectCount;
+    return getTotalReward() / mSelectCount;
   }
 
   /**
@@ -89,15 +95,19 @@ public class ScoreBoard
    */
   public final double getAverageReward()
   {
-    return mTotalReward.sum() / mSelectCount;
+    return getTotalReward() / mSelectCount;
   }
 
+  private double getTotalReward()
+  {
+    return Double.longBitsToDouble(mTotalReward);
+  }
   /**
    * Reset the score board as if created from scratch.
    */
   public void reset()
   {
     mSelectCount = 0;
-    mTotalReward.reset();
+    REWARD_UPDATER.set(this, 0);
   }
 }

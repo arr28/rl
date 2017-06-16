@@ -23,3 +23,22 @@ UCB1 Selection Policy, Simple Expand Policy, Dummy Rollout Policy, Simple Update
 2 thread(s) performed  687750 iterations/s (164%)
 3 thread(s) performed  907393 iterations/s (216%)
 4 thread(s) performed 1136145 iterations/s (271%)
+
+5. Use AtomicLongFieldUpdater (+double "casting") for mTotalReward
+1 thread(s) performed  449101 iterations/s (100%)
+2 thread(s) performed  771211 iterations/s (171%)
+3 thread(s) performed  988383 iterations/s (220%)
+4 thread(s) performed 1349067 iterations/s (300%)
+
+Same code but doing a quick sanity check on C4
+
+1 thread(s) performed 218605 iterations/s (100%)
+2 thread(s) performed 405393 iterations/s (185%)
+3 thread(s) performed 531382 iterations/s (243%)
+4 thread(s) performed 561512 iterations/s (256%)
+
+6. [No improvement] Using org.eclipse.collections.impl.map.mutable.ConcurrentHashMap
+1 thread(s) performed 436017 iterations/s (100%)
+2 thread(s) performed 752177 iterations/s (172%)
+3 thread(s) performed 944347 iterations/s (216%)
+4 thread(s) performed 1324352 iterations/s (303%)
