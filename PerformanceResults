@@ -1,74 +1,25 @@
-3,000,000 iterations of C4.  Results are best of 3 trials.
+3,000,000 iterations of the dummy game with branching factor 7.  Results are best of 3 trials.
+UCB1 Selection Policy, Simple Expand Policy, Dummy Rollout Policy, Simple Update Policy
 
-1 thread  = 160K
-2 threads = 230K (143%)
-4 threads = 240K (150%)
-8 threads = 245K (153%)
+1 thread(s) performed 247573 iterations/s (100%)
+2 thread(s) performed 382427 iterations/s (154%)
+3 thread(s) performed 516351 iterations/s (208%)
+4 thread(s) performed 569881 iterations/s (230%)
 
----
+2. +UCB1 Approx
+1 thread(s) performed 387867 iterations/s (100%)
+2 thread(s) performed 450887 iterations/s (116%)
+3 thread(s) performed 594428 iterations/s (153%)
+4 thread(s) performed 721699 iterations/s (186%)
 
-+Pre-allocated nodes
+3. Use AtomicLong for mSelectCount (instead of LongAdder)
+1 thread(s) performed 402606 iterations/s (100%)
+2 thread(s) performed 619382 iterations/s (153%)
+3 thread(s) performed 719142 iterations/s (178%)
+4 thread(s) performed 850334 iterations/s (211%)
 
-1 thread  = 185K
-2 threads = 285K (154%)
-3 threads = 325K (176%)
-4 threads = 315K (170%)
-
----
-
-+No Edges (just direct link to children).
-
-1 thread  = 210K
-2 threads = 334K (159%)
-3 threads = 370K (176%)
-4 threads = 361K (172%)
-
----
-
-+mSelectCount AtomicIntegerFieldUpdater
-
-1 thread  = 164K
-2 threads = 286K (174%)
-3 threads = 331K (202%)
-4 threads = 334K (204%)
-
----
-
-+mTotalReward likewise
-
-1 thread  = 166K
-4 threads = 321K 
-
----
-
-+AtomicReferenceArray for edges
-
-1 thread  = 123K
-2 threads = 208K (169%)
-3 threads = 246K (200%)
-4 threads = 241K
-
----
-
-Switch to LongAdder & DoubleAdder (instead of FieldUpdater)
-
-1 thread  = 123K 
-3 threads = 215K (175%)
-
----
-
-Better test framework
-
-Best speed for 1 thread(s) was 177559 iterations/s
-Best speed for 2 thread(s) was 271271 iterations/s (152%)
-Best speed for 3 thread(s) was 334055 iterations/s (188%)
-Best speed for 4 thread(s) was 391517 iterations/s (220%)
-
----
-
-+Set TreeNode.MAX_BRANCHING_FACTOR = 7
-
-1 thread(s) performed 244503 iterations/s (100%)
-2 thread(s) performed 349969 iterations/s (143%)
-3 thread(s) performed 461072 iterations/s (188%)
-4 thread(s) performed 497039 iterations/s (203%)
+4. Use AtomicLongFieldUpdater for mSelectCount
+1 thread(s) performed  418855 iterations/s (100%)
+2 thread(s) performed  687750 iterations/s (164%)
+3 thread(s) performed  907393 iterations/s (216%)
+4 thread(s) performed 1136145 iterations/s (271%)

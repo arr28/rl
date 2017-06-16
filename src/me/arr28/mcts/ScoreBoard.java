@@ -1,7 +1,7 @@
 package me.arr28.mcts;
 
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.DoubleAdder;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * A score board keeping track of the results of performing a particular action in a particular state.
@@ -10,10 +10,13 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public class ScoreBoard
 {
+  private static final AtomicLongFieldUpdater<ScoreBoard> SELECT_UPDATER =
+      AtomicLongFieldUpdater.newUpdater(ScoreBoard.class, "mSelectCount");
+
   /**
    * The number of times that the node associated with this score board has been selected.
    */
-  private final LongAdder mSelectCount = new LongAdder();
+  private volatile long mSelectCount;
 
   /**
    * The total score (a double) from all rollouts through this node, encoded
@@ -50,7 +53,7 @@ public class ScoreBoard
   {
     // Record the selection now, which makes this node look like a poorer choice until the result is recorded.  In a
     // multi-threaded environment, this tends to make different threads explore different parts of the tree.
-    mSelectCount.increment();
+    SELECT_UPDATER.incrementAndGet(this);
   }
 
   /**
@@ -58,7 +61,7 @@ public class ScoreBoard
    */
   public long getSelectCount()
   {
-    return mSelectCount.sum();
+    return mSelectCount;
   }
 
   /**
@@ -78,7 +81,7 @@ public class ScoreBoard
    */
   public double getSelectionWeight()
   {
-    return mTotalReward.sum() / mSelectCount.sum();
+    return mTotalReward.sum() / mSelectCount;
   }
 
   /**
@@ -86,7 +89,7 @@ public class ScoreBoard
    */
   public final double getAverageReward()
   {
-    return mTotalReward.sum() / mSelectCount.sum();
+    return mTotalReward.sum() / mSelectCount;
   }
 
   /**
@@ -94,7 +97,7 @@ public class ScoreBoard
    */
   public void reset()
   {
-    mSelectCount.reset();
+    mSelectCount = 0;
     mTotalReward.reset();
   }
 }

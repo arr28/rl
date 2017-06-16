@@ -10,7 +10,7 @@ import me.arr28.game.GameStateFactory;
  */
 public class DummyState implements GameState
 {
-  private static final int BRANCHING_FACTOR = 10;
+  private static final int BRANCHING_FACTOR = 7;
   private int mPlayer = 0;
 
   @Override

@@ -31,9 +31,9 @@ public class PerformanceTest
    */
   private static final int MAX_THREADS = 4;
   private static final int NUM_REPEATS = 3;
-  private static final int NUM_PURE_ROLLOUTS = 1_000_000;
+  private static final int NUM_PURE_ROLLOUTS = 100_000_000;
   private static final int NUM_MCTS_ITERATIONS = MCTSTree.NODE_POOL_SIZE - 1;
-  private static final Policies POLICY_SET = Policies.UCT_APPROX;
+  private static final Policies POLICY_SET = Policies.TREE_SPEED;
   private static final Game GAME = Game.CONNECT4;
 
   private static enum Policies
@@ -101,7 +101,7 @@ public class PerformanceTest
         break;
 
       case TREE_SPEED:
-        lSelectPolicy = new UCB1SelectPolicy();
+        lSelectPolicy = new UCB1ApproxSelectPolicy();
         lExpandPolicy = new SimpleExpandPolicy();
         lRolloutPolicy = new DummyRolloutPolicy();
         lUpdatePolicy = new SimpleUpdatePolicy();
