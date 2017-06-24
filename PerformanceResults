@@ -30,6 +30,13 @@ UCB1 Selection Policy, Simple Expand Policy, Dummy Rollout Policy, Simple Update
 3 thread(s) performed  988383 iterations/s (220%)
 4 thread(s) performed 1349067 iterations/s (300%)
 
+At this point, CPU sampling shows...
+
+- 80% CHM.putIfAbsent
+- 10% UCB1ApproxSelectPolicy.select()
+-  8% TreeNode.reset()
+-  1% MCTSTree.iterate()
+
 Same code but doing a quick sanity check on C4
 
 1 thread(s) performed 217956 iterations/s (100%)

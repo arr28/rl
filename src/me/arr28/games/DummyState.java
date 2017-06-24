@@ -1,5 +1,7 @@
 package me.arr28.games;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import me.arr28.game.GameState;
 import me.arr28.game.GameStateFactory;
 
@@ -11,6 +13,7 @@ import me.arr28.game.GameStateFactory;
 public class DummyState implements GameState
 {
   private static final int BRANCHING_FACTOR = 7;
+  private final int mHash = ThreadLocalRandom.current().nextInt();
   private int mPlayer = 0;
 
   @Override
@@ -48,6 +51,12 @@ public class DummyState implements GameState
   {
     DummyState xiNew = (DummyState)xiDestination;
     xiNew.mPlayer = mPlayer;
+  }
+
+  @Override
+  public int hashCode()
+  {
+    return mHash;
   }
 
   public static class DummyGameStateFactory implements GameStateFactory
