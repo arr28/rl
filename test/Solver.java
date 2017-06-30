@@ -1,3 +1,5 @@
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 
 import me.arr28.game.GameState;
@@ -8,27 +10,22 @@ import me.arr28.mcts.zeroalloc.ZeroAllocLinkedList;
 
 public class Solver
 {
-  private static int MAX_CACHE_SIZE = 10_000_000;
+  private static final int MAX_DEPTH = 50;
+  private static final int MAX_ACTIONS = 7;
+  private static final int MAX_CACHE_SIZE = 5_000_000;
+  private static final boolean DO_ONE_MOVE_LOOKAHEAD = true;
 
   private static class CachableState implements Linkable<CachableState>
   {
     private CachableState mPrev;
     private CachableState mNext;
-    private final GameState mState;
-    public final double mReward;
-
-    public CachableState(GameState xiState, double xiReward)
-    {
-      mState = xiState;
-      mReward = xiReward;
-    }
+    public GameState mState;
+    public double mReward;
 
     @Override public void setPrev(CachableState xiPrev) {mPrev = xiPrev;}
     @Override public CachableState getPrev() {return mPrev;}
     @Override public void setNext(CachableState xiNext) {mNext = xiNext;}
     @Override public CachableState getNext() {return mNext;}
-
-    public GameState getState() {return mState;}
 
     @Override public int hashCode() {return mState.hashCode();}
     @Override public boolean equals(Object xiOther)
@@ -45,7 +42,10 @@ public class Solver
   private long mCacheEvictions;
 
   private long mTerminalStatesVisited;
+  private long mWinningPeeks;
   private int mSmallestCompleteDepth;
+
+  private final GameState[][] mLookAhead = new GameState[MAX_DEPTH][MAX_ACTIONS];
 
   public static void main(String[] xiArgs)
   {
@@ -55,95 +55,156 @@ public class Solver
 
   private void solve()
   {
-    final int MAX_DEPTH = 50;
     mSmallestCompleteDepth = MAX_DEPTH;
 
-    GameState[] lStateStack = new GameState[MAX_DEPTH];
-    for (int lii = 0; lii < MAX_DEPTH; lii++)
+    for (int lDepth = 0; lDepth < MAX_DEPTH; lDepth++)
     {
-      lStateStack[lii] = mGameStateFactory.createInitialState();
+      for (int lAction = 0; lAction < MAX_ACTIONS; lAction++)
+      {
+        mLookAhead[lDepth][lAction] = mGameStateFactory.createInitialState();
+      }
     }
 
-    double lValue = solve(lStateStack, 0, 0, 1);
-    System.out.println("Value of initial state is " + lValue);
+    double lValue = solve(mGameStateFactory.createInitialState(), 0, 0, 1);
+    log("Value of initial state is " + lValue);
   }
 
-  private double solve(GameState[] xiStateStack, int xiDepth, double xiAlpha, double xiBeta)
+  private double solve(GameState xiState, int xiDepth, double xiAlpha, double xiBeta)
   {
-    GameState lCurrentState = xiStateStack[xiDepth];
-    boolean lDoCache = ((xiDepth % 8 == 0) && (xiDepth < 40));
-    if (lDoCache && mCache.containsKey(lCurrentState))
+    boolean lDoCache = ((xiDepth % 4 == 0) && (xiDepth < 40));
+    if (lDoCache && mCache.containsKey(xiState))
     {
       mCacheHits++;
-      CachableState lCached = mCache.get(lCurrentState);
+      CachableState lCached = mCache.get(xiState);
       mRUOrder.remove(lCached);
       mRUOrder.add(lCached);
       return lCached.mReward;
     }
 
-    if (lCurrentState.isTerminal())
+    if (xiState.isTerminal())
     {
-      if (++mTerminalStatesVisited % 100_000_000L == 0)
+      if (xiState.getReward() != 0.5)
       {
-        System.out.println("Terminals, Cache Size, Hits, Evictions = " + mTerminalStatesVisited + ", " + mCache.size() + ", " + mCacheHits + ", " + mCacheEvictions);
+        throw new RuntimeException("Unexpected score " + xiState.getReward() + " in state:\n" + xiState);
       }
-      return lCurrentState.getReward();
+      recordTerminal();
+      return xiState.getReward();
     }
 
-    GameState lNextState = xiStateStack[xiDepth + 1];
-    int lNumActions = lCurrentState.getNumLegalActions();
-    double lBestReward;
+    int lNumActions = xiState.getNumLegalActions();
+    double lBestReward = 0;
 
-    if (lCurrentState.getPlayer() == 0)
+    GameState[] lLookAhead = mLookAhead[xiDepth];
+    if (xiState.getPlayer() == 0)
     {
       // Player 0 is trying to maximize the score
-      lBestReward = 0;
+
+      // Look for a 1-move win
+      boolean lFoundWin = false;
       for (int lAction = 0; lAction < lNumActions; lAction++)
       {
-        lCurrentState.copyTo(lNextState);
-        lNextState.applyAction(lAction);
-        lBestReward = Math.max(lBestReward, solve(xiStateStack, xiDepth + 1, xiAlpha, xiBeta));
-        xiAlpha = Math.max(xiAlpha, lBestReward);
-        if (xiBeta <= xiAlpha) break;
+        GameState lPeekState = lLookAhead[lAction];
+        xiState.copyTo(lPeekState);
+        lPeekState.applyAction(lAction);
+        if ((lPeekState.isTerminal()) && (lPeekState.getReward() == 1))
+        {
+          mWinningPeeks++;
+          recordTerminal();
+          lBestReward = 1;
+          lFoundWin = true;
+          break;
+        }
+      }
+
+      if (!lFoundWin)
+      {
+        // No immediate win, so explore all options thoroughly.
+        lBestReward = 0;
+        for (int lAction = 0; lAction < lNumActions; lAction++)
+        {
+          lBestReward = Math.max(lBestReward, solve(lLookAhead[lAction], xiDepth + 1, xiAlpha, xiBeta));
+          xiAlpha = Math.max(xiAlpha, lBestReward);
+          if (xiBeta <= xiAlpha) break;
+        }
       }
     }
     else
     {
       // Player 1 is trying to minimize the score
-      lBestReward = 1;
+
+      // Look for a 1-move win
+      boolean lFoundWin = false;
       for (int lAction = 0; lAction < lNumActions; lAction++)
       {
-        lCurrentState.copyTo(lNextState);
-        lNextState.applyAction(lAction);
-        lBestReward = Math.min(lBestReward, solve(xiStateStack, xiDepth + 1, xiAlpha, xiBeta));
-        xiBeta = Math.min(xiBeta, lBestReward);
-        if (xiBeta <= xiAlpha) break;
+        GameState lPeekState = lLookAhead[lAction];
+        xiState.copyTo(lPeekState);
+        lPeekState.applyAction(lAction);
+        if ((lPeekState.isTerminal()) && (lPeekState.getReward() == 0))
+        {
+          mWinningPeeks++;
+          recordTerminal();
+          lBestReward = 0;
+          lFoundWin = true;
+          break;
+        }
+      }
+
+      if (!lFoundWin)
+      {
+        // No immediate win, so explore all options thoroughly.
+        lBestReward = 1;
+        for (int lAction = 0; lAction < lNumActions; lAction++)
+        {
+          lBestReward = Math.min(lBestReward, solve(lLookAhead[lAction], xiDepth + 1, xiAlpha, xiBeta));
+          xiBeta = Math.min(xiBeta, lBestReward);
+          if (xiBeta <= xiAlpha) break;
+        }
       }
     }
 
     if (xiDepth < mSmallestCompleteDepth)
     {
       mSmallestCompleteDepth = xiDepth;
-      System.out.println("Completed a sub-tree at depth: " + mSmallestCompleteDepth);
+      log("Completed a sub-tree at depth: " + mSmallestCompleteDepth);
     }
 
     if (lDoCache)
     {
-      GameState lState = mGameStateFactory.createInitialState();
-      lCurrentState.copyTo(lState);
-      CachableState lCachableState = new CachableState(lState, lBestReward);
-      mCache.put(lState, lCachableState);
-      mRUOrder.add(lCachableState);
-
-      if (mCache.size() > MAX_CACHE_SIZE)
+      CachableState lCachableState;
+      if (mCache.size() >= MAX_CACHE_SIZE)
       {
+        // The cache is full.  Evict the oldest item and recycle it.
         mCacheEvictions++;
-        CachableState lEvict = mRUOrder.getFirst();
-        mRUOrder.remove(lEvict);
-        mCache.remove(lEvict.getState());
+        lCachableState = mRUOrder.getFirst();
+        mRUOrder.remove(lCachableState);
+        mCache.remove(lCachableState.mState);
       }
+      else
+      {
+        // The cache isn't full yet.  Prepare a new item.
+        lCachableState = new CachableState();
+        lCachableState.mState = mGameStateFactory.createInitialState();
+      }
+
+      xiState.copyTo(lCachableState.mState);
+      lCachableState.mReward = lBestReward;
+      mCache.put(lCachableState.mState, lCachableState);
+      mRUOrder.add(lCachableState);
     }
 
     return lBestReward;
+  }
+
+  private void recordTerminal()
+  {
+    if (++mTerminalStatesVisited % 100_000_000L == 0)
+    {
+      log("Terminals, Wins, Cache Size, Hits, Evictions = " + mTerminalStatesVisited + ", " + mWinningPeeks + ", " + mCache.size() + ", " + mCacheHits + ", " + mCacheEvictions);
+    }
+  }
+
+  private static void log(String xiMessage)
+  {
+    System.out.println("[" + ZonedDateTime.now().format( DateTimeFormatter.ISO_INSTANT) + "] " + xiMessage);
   }
 }
