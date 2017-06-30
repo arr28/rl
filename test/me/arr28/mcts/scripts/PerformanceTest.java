@@ -1,3 +1,4 @@
+package me.arr28.mcts.scripts;
 import me.arr28.game.GameState;
 import me.arr28.game.GameStateFactory;
 import me.arr28.games.BreakthroughState.BreakthroughGameStateFactory;

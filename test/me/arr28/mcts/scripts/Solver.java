@@ -1,21 +1,21 @@
+package me.arr28.mcts.scripts;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 
 import me.arr28.game.GameState;
 import me.arr28.game.GameStateFactory;
 import me.arr28.games.Connect4State.C4GameStateFactory;
-import me.arr28.mcts.zeroalloc.Linkable;
-import me.arr28.mcts.zeroalloc.ZeroAllocLinkedList;
+import me.arr28.mcts.zeroalloc.LRUCachable;
+import me.arr28.mcts.zeroalloc.LRUCache;
 
 public class Solver
 {
-  private static final int MAX_DEPTH = 50;
-  private static final int MAX_ACTIONS = 7;
-  private static final int MAX_CACHE_SIZE = 5_000_000;
-  private static final boolean DO_ONE_MOVE_LOOKAHEAD = true;
+  public static final int MAX_DEPTH = 50;
+  public static final int MAX_ACTIONS = 7;
+  public static final int MAX_CACHE_SIZE = 5_000_000;
+  public static final boolean DO_ONE_MOVE_LOOKAHEAD = true;
 
-  private static class CachableState implements Linkable<CachableState>
+  public static class CachableState implements LRUCachable<GameState, CachableState>
   {
     private CachableState mPrev;
     private CachableState mNext;
@@ -26,6 +26,7 @@ public class Solver
     @Override public CachableState getPrev() {return mPrev;}
     @Override public void setNext(CachableState xiNext) {mNext = xiNext;}
     @Override public CachableState getNext() {return mNext;}
+    @Override public GameState getKey() {return mState;}
 
     @Override public int hashCode() {return mState.hashCode();}
     @Override public boolean equals(Object xiOther)
@@ -35,11 +36,7 @@ public class Solver
   }
 
   private final GameStateFactory mGameStateFactory = new C4GameStateFactory();
-
-  private final HashMap<GameState, CachableState> mCache = new HashMap<>(MAX_CACHE_SIZE + 100);
-  private final ZeroAllocLinkedList<CachableState> mRUOrder = new ZeroAllocLinkedList<>();
-  private long mCacheHits;
-  private long mCacheEvictions;
+  private final LRUCache<GameState, CachableState> mCache = new LRUCache<>(MAX_CACHE_SIZE);
 
   private long mTerminalStatesVisited;
   private long mWinningPeeks;
@@ -72,13 +69,9 @@ public class Solver
   private double solve(GameState xiState, int xiDepth, double xiAlpha, double xiBeta)
   {
     boolean lDoCache = ((xiDepth % 4 == 0) && (xiDepth < 40));
-    if (lDoCache && mCache.containsKey(xiState))
+    if (lDoCache && mCache.contains(xiState))
     {
-      mCacheHits++;
-      CachableState lCached = mCache.get(xiState);
-      mRUOrder.remove(lCached);
-      mRUOrder.add(lCached);
-      return lCached.mReward;
+      return mCache.get(xiState).mReward;
     }
 
     if (xiState.isTerminal())
@@ -173,15 +166,10 @@ public class Solver
       CachableState lCachableState;
       if (mCache.size() >= MAX_CACHE_SIZE)
       {
-        // The cache is full.  Evict the oldest item and recycle it.
-        mCacheEvictions++;
-        lCachableState = mRUOrder.getFirst();
-        mRUOrder.remove(lCachableState);
-        mCache.remove(lCachableState.mState);
+        lCachableState = mCache.evict();
       }
       else
       {
-        // The cache isn't full yet.  Prepare a new item.
         lCachableState = new CachableState();
         lCachableState.mState = mGameStateFactory.createInitialState();
       }
@@ -189,7 +177,6 @@ public class Solver
       xiState.copyTo(lCachableState.mState);
       lCachableState.mReward = lBestReward;
       mCache.put(lCachableState.mState, lCachableState);
-      mRUOrder.add(lCachableState);
     }
 
     return lBestReward;
@@ -199,7 +186,7 @@ public class Solver
   {
     if (++mTerminalStatesVisited % 100_000_000L == 0)
     {
-      log("Terminals, Wins, Cache Size, Hits, Evictions = " + mTerminalStatesVisited + ", " + mWinningPeeks + ", " + mCache.size() + ", " + mCacheHits + ", " + mCacheEvictions);
+      log("Terminals, Wins, Cache Size, Hits, Evictions = " + mTerminalStatesVisited + ", " + mWinningPeeks + ", " + mCache.size() + ", " + mCache.mHits + ", " + mCache.mEvictions);
     }
   }
 
