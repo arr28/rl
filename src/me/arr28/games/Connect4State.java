@@ -12,8 +12,8 @@ import me.arr28.game.GameStateFactory;
  */
 public class Connect4State implements GameState
 {
-  private static final int WIDTH = 7;
-  private static final int HEIGHT = 7;
+  private static final int WIDTH = 6;
+  private static final int HEIGHT = 4;
 
   /**
    * The first free row in each of the columns.
