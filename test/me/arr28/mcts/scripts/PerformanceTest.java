@@ -4,6 +4,7 @@ import me.arr28.game.GameStateFactory;
 import me.arr28.games.BreakthroughState.BreakthroughGameStateFactory;
 import me.arr28.games.Connect4State.C4GameStateFactory;
 import me.arr28.games.DummyState.DummyGameStateFactory;
+import me.arr28.games.FastConnect4State.FastC4GameStateFactory;
 import me.arr28.games.HexState.HexGameStateFactory;
 import me.arr28.mcts.MCTSTree;
 import me.arr28.mcts.ScoreBoard;
@@ -32,10 +33,10 @@ public class PerformanceTest
    */
   private static final int MAX_THREADS = 4;
   private static final int NUM_REPEATS = 3;
-  private static final int NUM_PURE_ROLLOUTS = 0; // 1_000_000;
-  private static final int NUM_MCTS_ITERATIONS = MCTSTree.NODE_POOL_SIZE - 1;
-  private static final Policies POLICY_SET = Policies.TREE_SPEED;
-  private static final Game GAME = Game.CONNECT4;
+  private static final int NUM_PURE_ROLLOUTS = 1_000_000;
+  private static final int NUM_MCTS_ITERATIONS = 0; // MCTSTree.NODE_POOL_SIZE - 1;
+  private static final Policies POLICY_SET = Policies.UCT;
+  private static final Game GAME = Game.CONNECT4FAST;
 
   private static enum Policies
   {
@@ -44,7 +45,7 @@ public class PerformanceTest
 
   private static enum Game
   {
-    CONNECT4, HEX, BREAKTHROUGH;
+    CONNECT4, CONNECT4FAST, HEX, BREAKTHROUGH;
   }
 
   private final SelectPolicy lSelectPolicy;
@@ -119,6 +120,7 @@ public class PerformanceTest
       switch (GAME)
       {
         case CONNECT4: lGameStateFactory = new C4GameStateFactory(); break;
+        case CONNECT4FAST: lGameStateFactory = new FastC4GameStateFactory(); break;
         case HEX: lGameStateFactory = new HexGameStateFactory(); break;
         case BREAKTHROUGH: lGameStateFactory = new BreakthroughGameStateFactory(); break;
         default: throw new IllegalStateException("Invalid game selected");
@@ -156,6 +158,8 @@ public class PerformanceTest
 
   private void testFullMCTSSpeed()
   {
+    if (NUM_MCTS_ITERATIONS == 0) return;
+
     long[] lSpeed = new long[MAX_THREADS];
     for (int lThreads = 1; lThreads <= MAX_THREADS; lThreads++)
     {
