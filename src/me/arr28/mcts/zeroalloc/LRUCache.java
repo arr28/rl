@@ -19,24 +19,17 @@ public class LRUCache<K, V extends LRUCachable<K, V>>
     mRUOrderedList = new ZeroAllocLinkedList<>();
   }
 
-  public boolean contains(K xiKey)
+  public V get(K xiKey)
   {
-    if (mMap.containsKey(xiKey))
+    V lCached = mMap.get(xiKey);
+    if (lCached != null)
     {
       // Record the hit and move the item to the end of the LRU list.
       mHits++;
-      V lCached = mMap.get(xiKey);
       mRUOrderedList.remove(lCached);
       mRUOrderedList.add(lCached);
-      return true;
     }
-
-    return false;
-  }
-
-  public V get(K xiKey)
-  {
-    return mMap.get(xiKey);
+    return lCached;
   }
 
   public void put(K xiKey, V xiValue)
@@ -52,6 +45,12 @@ public class LRUCache<K, V extends LRUCachable<K, V>>
     mRUOrderedList.remove(lEvicted);
     mMap.remove(lEvicted.getKey());
     return lEvicted;
+  }
+
+  public void remove(V xiValue)
+  {
+    mRUOrderedList.remove(xiValue);
+    mMap.remove(xiValue.getKey());
   }
 
   public int size()

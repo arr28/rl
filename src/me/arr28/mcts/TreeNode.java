@@ -12,7 +12,7 @@ import me.arr28.pool.Pool.ObjectAllocator;
  */
 public class TreeNode
 {
-  private static final int MAX_BRANCHING_FACTOR = 7; // !! ARR Branching factor hack.
+  private static final int MAX_BRANCHING_FACTOR = 8; // !! ARR Branching factor hack.
 
   private final MCTSTree mTree;
   private final AtomicReferenceArray<TreeNode> mChildren = new AtomicReferenceArray<>(MAX_BRANCHING_FACTOR);

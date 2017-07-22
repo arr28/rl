@@ -49,3 +49,10 @@ Same code but doing a quick sanity check on C4
 2 thread(s) performed 752177 iterations/s (172%)
 3 thread(s) performed 944347 iterations/s (216%)
 4 thread(s) performed 1324352 iterations/s (303%)
+
+!! For investigation:
+
+For pure rollouts, CONNECT4 does ~1M/s and CONNECT4FAST does ~2M/s.  However, when combined with UCB_APPROX, the former
+is ~25% faster. 
+
+  

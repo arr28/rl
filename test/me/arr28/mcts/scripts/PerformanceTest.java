@@ -17,8 +17,6 @@ import me.arr28.mcts.policy.SelectPolicy;
 import me.arr28.mcts.policy.UpdatePolicy;
 import me.arr28.mcts.policy.rollout.DummyRolloutPolicy;
 import me.arr28.mcts.policy.rollout.SimpleRolloutPolicy;
-import me.arr28.mcts.policy.tree.Exp3Policy;
-import me.arr28.mcts.policy.tree.Exp3Policy.Exp3ScoreBoardFactory;
 import me.arr28.mcts.policy.tree.NoExpandPolicy;
 import me.arr28.mcts.policy.tree.RandomSelectPolicy;
 import me.arr28.mcts.policy.tree.SimpleExpandPolicy;
@@ -33,14 +31,14 @@ public class PerformanceTest
    */
   private static final int MAX_THREADS = 4;
   private static final int NUM_REPEATS = 3;
-  private static final int NUM_PURE_ROLLOUTS = 1_000_000;
+  private static final int NUM_PURE_ROLLOUTS = 10_000_000;
   private static final int NUM_MCTS_ITERATIONS = 0; // MCTSTree.NODE_POOL_SIZE - 1;
-  private static final Policies POLICY_SET = Policies.UCT;
+  private static final Policies POLICY_SET = Policies.UCT_APPROX;
   private static final Game GAME = Game.CONNECT4FAST;
 
   private static enum Policies
   {
-    SUPER_SIMPLE, UCT, UCT_APPROX, EXP3, TREE_SPEED;
+    SUPER_SIMPLE, UCT, UCT_APPROX, TREE_SPEED;
   }
 
   private static enum Game
@@ -92,14 +90,6 @@ public class PerformanceTest
         lRolloutPolicy = new SimpleRolloutPolicy();
         lUpdatePolicy = new SimpleUpdatePolicy();
         lScoreBoardFactory = new PlainScoreBoardFactory();
-        break;
-
-      case EXP3:
-        lSelectPolicy = new Exp3Policy();
-        lExpandPolicy = new SimpleExpandPolicy();
-        lRolloutPolicy = new SimpleRolloutPolicy();
-        lUpdatePolicy = (UpdatePolicy)lSelectPolicy;
-        lScoreBoardFactory = new Exp3ScoreBoardFactory();
         break;
 
       case TREE_SPEED:

@@ -21,6 +21,8 @@ public class Solver
     private CachableState mNext;
     public GameState mState;
     public double mReward;
+    public double mAlpha;
+    public double mBeta;
 
     @Override public void setPrev(CachableState xiPrev) {mPrev = xiPrev;}
     @Override public CachableState getPrev() {return mPrev;}
@@ -41,6 +43,7 @@ public class Solver
   private long mTerminalStatesVisited;
   private long mPeekResults;
   private int mSmallestCompleteDepth;
+  private long mUnusableCacheHits;
 
   private final GameState[][] mLookAhead = new GameState[MAX_DEPTH][MAX_ACTIONS];
 
@@ -65,26 +68,6 @@ public class Solver
     GameState lInitialState = mGameStateFactory.createInitialState();
     // --- Column numbering: 012345
     // lInitialState.applyAction(5);
-
-    // !! When starting at the real root state, the 1-move scores are reported as
-    // !! loss, loss, draw, draw, draw, draw
-    // !!
-    // !! But when playing the first move manually, the 0-move scores are reported as
-    // !! loss, loss, loss, draw, draw, loss
-    // !!
-    // !! Which makes it look like there's some state corruption happening.
-    // !!
-    // !! Aha - turning of caching solves it.  I strongly suspect this is a nasty interaction
-    // !! between caching & alpha-beta pruning.  Due to a-b pruning, we might choose to stop looking when we find a draw
-    // !! even if the position is actually a win (because we know that the previous node can already hold us to a draw).
-    // !! That's fine in context.  But we would then cache the state as a draw (when it could still be a win).  Then we
-    // !! might use the cached state's value in a different context.
-    // !!
-    // !! 1 possible solution is to store the relevant a-b parameters and only use the cached value if the new context
-    // !! is the same as the context in which it was stored.  Otherwise do the full calculation and updated the cached
-    // !! value.  (Reusing cached results from a less constrained run is also okay.  And we only care about 1 of alpha or
-    // !! beta.)
-
     double lValue = solve(lInitialState, 0, 0, 1);
     log("Value of state is " + lValue + "\n" + lInitialState);
     logStats();
@@ -92,19 +75,31 @@ public class Solver
 
   private double solve(GameState xiState, int xiDepth, double xiAlpha, double xiBeta)
   {
-    // log("solve(depth=" + xiDepth + ", alpha=" + xiAlpha + ", beta=" + xiBeta + ")...\n" + xiState);
-
-    // boolean lDoCache = ((xiDepth % 4 == 0) && (xiDepth < 28));
-    boolean lDoCache = false; // !! ARR Enable caching
-    if (lDoCache && mCache.contains(xiState))
-    {
-      return mCache.get(xiState).mReward;
-    }
+    double lInitialAlpha = xiAlpha;
+    double lInitialBeta = xiBeta;
 
     if (xiState.isTerminal())
     {
       recordTerminal();
       return xiState.getReward();
+    }
+
+    boolean lDoCache = ((xiDepth % 4 == 0) && (xiDepth < 28));
+    CachableState lCachedState;
+    if (lDoCache && ((lCachedState = mCache.get(xiState)) != null))
+    {
+      // We can only use the cached state if the alpha/beta values it was
+      // recorded with an no more restrictive than the current values.
+      //if ((xiState.getPlayer() == 0 && xiBeta <= lCachedState.mBeta) ||
+      //    (xiState.getPlayer() == 1 && xiAlpha >= lCachedState.mAlpha))
+      if ((xiAlpha >= lCachedState.mAlpha) && (xiBeta <= lCachedState.mBeta))
+      {
+        return lCachedState.mReward;
+      }
+
+      // Remove the item from the cache because we're going to replace it.
+      mUnusableCacheHits++;
+      mCache.remove(lCachedState);
     }
 
     int lNumActions = xiState.getNumLegalActions();
@@ -178,10 +173,10 @@ public class Solver
       }
     }
 
-    if (xiDepth <= mSmallestCompleteDepth)
+    if ((xiDepth < mSmallestCompleteDepth) || (xiDepth == 1))
     {
       mSmallestCompleteDepth = xiDepth;
-      log("Completed a sub-tree at depth: " + mSmallestCompleteDepth + " with result " + lBestReward /*+ "\n" + xiState*/);
+      log("Completed a sub-tree at depth: " + mSmallestCompleteDepth + " with result " + lBestReward);
       if (xiDepth == 1)
       {
         log("\n" + xiState);
@@ -190,25 +185,30 @@ public class Solver
 
     if (lDoCache)
     {
-      CachableState lCachableState;
-      if (mCache.size() >= MAX_CACHE_SIZE)
-      {
-        lCachableState = mCache.evict();
-      }
-      else
-      {
-        lCachableState = new CachableState();
-        lCachableState.mState = mGameStateFactory.createInitialState();
-      }
-
-      xiState.copyTo(lCachableState.mState);
-      lCachableState.mReward = lBestReward;
-      mCache.put(lCachableState.mState, lCachableState);
+      cache(xiState, lBestReward, lInitialAlpha, lInitialBeta);
     }
 
-    // log("Solved (depth=" + xiDepth + ", alpha=" + xiAlpha + ", beta=" + xiBeta + ") with reward " + lBestReward + " for\n" + xiState);
-
     return lBestReward;
+  }
+
+  private void cache(GameState xiState, double xiBestReward, double xiAlpha, double xiBeta)
+  {
+    CachableState lCachableState;
+    if (mCache.size() >= MAX_CACHE_SIZE)
+    {
+      lCachableState = mCache.evict();
+    }
+    else
+    {
+      lCachableState = new CachableState();
+      lCachableState.mState = mGameStateFactory.createInitialState();
+    }
+
+    xiState.copyTo(lCachableState.mState);
+    lCachableState.mReward = xiBestReward;
+    lCachableState.mAlpha = xiAlpha;
+    lCachableState.mBeta = xiBeta;
+    mCache.put(lCachableState.mState, lCachableState);
   }
 
   private void recordTerminal()
@@ -226,6 +226,12 @@ public class Solver
 
   private void logStats()
   {
-    log("Terminals, Peeks, Cache Size, Hits, Evictions = " + mTerminalStatesVisited + ", " + mPeekResults + ", " + mCache.size() + ", " + mCache.mHits + ", " + mCache.mEvictions);
+    log("Terminals, Peeks, Cache Size, Hits, Unusable, Evictions = " +
+        mTerminalStatesVisited + ", " +
+        mPeekResults + ", " +
+        mCache.size() + ", " +
+        mCache.mHits + ", " +
+        mUnusableCacheHits + ", " +
+        mCache.mEvictions);
   }
 }

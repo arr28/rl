@@ -24,7 +24,7 @@ public class FastConnect4State implements GameState
    * +---------------------+
    */
   private static final int WIDTH = 6;   // Max supported = 8
-  private static final int HEIGHT = 4;  // Max supported = 6
+  private static final int HEIGHT = 6;  // Max supported = 6
 
   /**
    * A board for each player, according to the diagram above.  Own counters
