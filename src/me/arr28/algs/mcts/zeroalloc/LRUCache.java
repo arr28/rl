@@ -1,4 +1,4 @@
-package me.arr28.mcts.zeroalloc;
+package me.arr28.algs.mcts.zeroalloc;
 
 import java.util.HashMap;
 

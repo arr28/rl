@@ -1,4 +1,4 @@
-package me.arr28.mcts.zeroalloc;
+package me.arr28.algs.mcts.zeroalloc;
 
 public class ZeroAllocLinkedList<T extends Linkable<T>>
 {

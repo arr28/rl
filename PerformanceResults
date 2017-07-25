@@ -37,7 +37,7 @@ At this point, CPU sampling shows...
 -  8% TreeNode.reset()
 -  1% MCTSTree.iterate()
 
-Same code but doing a quick sanity check on C4
+Same code but doing a quick sanity check on C4 (of unknown size ;-()
 
 1 thread(s) performed 217956 iterations/s (100%)
 2 thread(s) performed 382538 iterations/s (175%)
@@ -53,6 +53,6 @@ Same code but doing a quick sanity check on C4
 !! For investigation:
 
 For pure rollouts, CONNECT4 does ~1M/s and CONNECT4FAST does ~2M/s.  However, when combined with UCB_APPROX, the former
-is ~25% faster. 
+is ~25% faster.
 
   

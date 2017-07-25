@@ -1,9 +1,9 @@
-package me.arr28.mcts.policy.rollout;
+package me.arr28.algs.mcts.policy.rollout;
 
 import java.util.concurrent.ThreadLocalRandom;
 
+import me.arr28.algs.mcts.policy.RolloutPolicy;
 import me.arr28.game.GameState;
-import me.arr28.mcts.policy.RolloutPolicy;
 
 /**
  * A simple random rollout policy.

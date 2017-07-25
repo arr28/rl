@@ -1,15 +1,15 @@
-package me.arr28.mcts.policy.tree;
+package me.arr28.algs.mcts.policy.tree;
 
-import me.arr28.mcts.ScoreBoard;
-import me.arr28.mcts.TreeNode;
-import me.arr28.mcts.policy.SelectPolicy;
+import me.arr28.algs.mcts.ScoreBoard;
+import me.arr28.algs.mcts.TreeNode;
+import me.arr28.algs.mcts.policy.SelectPolicy;
 
 /**
  * Select the child node with the maximum UCB1 score.
  *
  * @author Andrew Rose
  */
-public class UCB1ApproxSelectPolicy implements SelectPolicy
+public class UCB1SelectPolicy implements SelectPolicy
 {
   @Override
   public TreeNode select(TreeNode xiNode)
@@ -22,7 +22,7 @@ public class UCB1ApproxSelectPolicy implements SelectPolicy
     for (int lAction = 0; lAction < lNumActions; lAction++)
     {
       TreeNode lChild = lChildren[lAction];
-      double lScore = approxUCB1(xiNode, lChild);
+      double lScore = calculateUCB1(xiNode, lChild);
       if (lScore > lBestScore)
       {
         lBestChild = lChild;
@@ -32,21 +32,11 @@ public class UCB1ApproxSelectPolicy implements SelectPolicy
     return lBestChild;
   }
 
-  private static double approxUCB1(TreeNode xiParent, TreeNode xiChild)
+  private static double calculateUCB1(TreeNode xiParent, TreeNode xiChild)
   {
     ScoreBoard lParentScores = xiParent.mScoreBoard;
     ScoreBoard lChildScores = xiChild.mScoreBoard;
     return lChildScores.getAverageReward() +
-        sqrt((2.0 * log(lParentScores.getSelectCount())) / lChildScores.getSelectCount());
-  }
-
-  private static double log(double x)
-  {
-    return 6.0 * (x - 1.0) / (x + 1.0 + 4.0 * (sqrt(x)));
-  }
-
-  private static double sqrt(double d)
-  {
-    return Double.longBitsToDouble(((Double.doubleToLongBits(d) >> 32) + 1072632448) << 31);
+           Math.sqrt(2.0 * Math.log(lParentScores.getSelectCount()) / lChildScores.getSelectCount());
   }
 }

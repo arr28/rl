@@ -1,7 +1,7 @@
-package me.arr28.mcts.policy.tree;
+package me.arr28.algs.mcts.policy.tree;
 
-import me.arr28.mcts.TreeNode;
-import me.arr28.mcts.policy.ExpandPolicy;
+import me.arr28.algs.mcts.TreeNode;
+import me.arr28.algs.mcts.policy.ExpandPolicy;
 
 /**
  * A simple expansion policy that expands a single child at random.

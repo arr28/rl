@@ -1,6 +1,6 @@
-package me.arr28.mcts.policy;
+package me.arr28.algs.mcts.policy;
 
-import me.arr28.mcts.TreeNode;
+import me.arr28.algs.mcts.TreeNode;
 
 /**
  * An MCTS update policy.

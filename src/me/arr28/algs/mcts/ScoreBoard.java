@@ -1,4 +1,4 @@
-package me.arr28.mcts;
+package me.arr28.algs.mcts;
 
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 

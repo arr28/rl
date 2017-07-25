@@ -1,4 +1,4 @@
-package me.arr28.mcts;
+package me.arr28.algs.mcts;
 
 /**
  * Factory for score boards.

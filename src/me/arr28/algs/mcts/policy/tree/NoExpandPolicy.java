@@ -1,9 +1,9 @@
-package me.arr28.mcts.policy.tree;
+package me.arr28.algs.mcts.policy.tree;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import me.arr28.mcts.TreeNode;
-import me.arr28.mcts.policy.ExpandPolicy;
+import me.arr28.algs.mcts.TreeNode;
+import me.arr28.algs.mcts.policy.ExpandPolicy;
 
 /**
  * Expands the root node but then performs no further expansion - i.e. turns MCTS into plain Monte Carlo search.

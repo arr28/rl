@@ -1,9 +1,9 @@
-package me.arr28.mcts.policy.tree;
+package me.arr28.algs.mcts.policy.tree;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import me.arr28.mcts.TreeNode;
-import me.arr28.mcts.policy.SelectPolicy;
+import me.arr28.algs.mcts.TreeNode;
+import me.arr28.algs.mcts.policy.SelectPolicy;
 
 /**
  * Select policy that picks at (uniform) random from all actions.  Assumes that all children have already been expanded.

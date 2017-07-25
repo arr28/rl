@@ -1,8 +1,8 @@
-package me.arr28.mcts.policy.tree;
+package me.arr28.algs.mcts.policy.tree;
 
-import me.arr28.mcts.ScoreBoard;
-import me.arr28.mcts.TreeNode;
-import me.arr28.mcts.policy.UpdatePolicy;
+import me.arr28.algs.mcts.ScoreBoard;
+import me.arr28.algs.mcts.TreeNode;
+import me.arr28.algs.mcts.policy.UpdatePolicy;
 
 public class SimpleUpdatePolicy implements UpdatePolicy
 {

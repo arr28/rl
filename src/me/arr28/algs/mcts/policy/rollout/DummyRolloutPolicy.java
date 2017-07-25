@@ -1,7 +1,7 @@
-package me.arr28.mcts.policy.rollout;
+package me.arr28.algs.mcts.policy.rollout;
 
+import me.arr28.algs.mcts.policy.RolloutPolicy;
 import me.arr28.game.GameState;
-import me.arr28.mcts.policy.RolloutPolicy;
 
 /**
  * A dummy rollout policy that immediately returns 0.  Useful for performance testing of the tree.

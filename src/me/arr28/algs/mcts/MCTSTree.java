@@ -1,14 +1,14 @@
-package me.arr28.mcts;
+package me.arr28.algs.mcts;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import me.arr28.algs.mcts.TreeNode.TreeNodeAllocator;
+import me.arr28.algs.mcts.policy.ExpandPolicy;
+import me.arr28.algs.mcts.policy.RolloutPolicy;
+import me.arr28.algs.mcts.policy.SelectPolicy;
+import me.arr28.algs.mcts.policy.UpdatePolicy;
 import me.arr28.game.GameState;
 import me.arr28.game.GameStateFactory;
-import me.arr28.mcts.TreeNode.TreeNodeAllocator;
-import me.arr28.mcts.policy.ExpandPolicy;
-import me.arr28.mcts.policy.RolloutPolicy;
-import me.arr28.mcts.policy.SelectPolicy;
-import me.arr28.mcts.policy.UpdatePolicy;
 import me.arr28.pool.CappedPool;
 import me.arr28.pool.Pool;
 
