@@ -3,7 +3,7 @@ package me.arr28.games.mdps;
 import me.arr28.game.DoubleQLearnableState;
 import me.arr28.game.DoubleQLearnableState.QLearnableBaseState;
 import me.arr28.game.MDPStateFactory;
-import me.arr28.util.MutableInt;
+import me.arr28.util.MutableDouble;
 
 /**
  * Cliff Walking puzzle state.
@@ -83,7 +83,7 @@ public class CliffWalkingState extends QLearnableBaseState {
     }
 
     @Override
-    public DoubleQLearnableState perform(int xiAction, MutableInt xoReward) {
+    public DoubleQLearnableState perform(int xiAction, MutableDouble xoReward) {
         int lX = mX;
         int lY = mY;
 

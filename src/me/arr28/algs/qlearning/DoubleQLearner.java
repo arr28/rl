@@ -3,7 +3,7 @@ package me.arr28.algs.qlearning;
 import java.util.Random;
 
 import me.arr28.game.DoubleQLearnableState;
-import me.arr28.util.MutableInt;
+import me.arr28.util.MutableDouble;
 
 public class DoubleQLearner {
     private static final Random RANDOM = new Random();
@@ -19,14 +19,17 @@ public class DoubleQLearner {
     /**
      * Perform Q-learning over a single episode.
      */
-    public void iterate(DoubleQLearnableState xiInitialState) {
-        MutableInt lReward = new MutableInt();
+    public double iterate(DoubleQLearnableState xiInitialState) {
+        double lTotalReward = 0;
+        MutableDouble lReward = new MutableDouble();
         DoubleQLearnableState lNewState;
         for (DoubleQLearnableState lState = xiInitialState; !lState.isTerminal(); lState = lNewState) {
             int lAction = chooseAction(lState);
             lNewState = lState.perform(lAction, lReward);
             learn(lState, lAction, lNewState, lReward.mValue);
+            lTotalReward += lReward.mValue;
         }
+        return lTotalReward;
     }
 
     private int chooseAction(DoubleQLearnableState xiState) {
@@ -37,7 +40,7 @@ public class DoubleQLearner {
         return xiState.getBestAction(true);
     }
 
-    private void learn(DoubleQLearnableState xiOld, int xiAction, DoubleQLearnableState xiNew, int xiReward) {
+    private void learn(DoubleQLearnableState xiOld, int xiAction, DoubleQLearnableState xiNew, double xiReward) {
         // Double-Q-learning update
         boolean lPrimary = RANDOM.nextBoolean();
         double lOldQ = xiOld.getActionQ(lPrimary, xiAction);

@@ -1,6 +1,6 @@
 package me.arr28.game;
 
-import me.arr28.util.MutableInt;
+import me.arr28.util.MutableDouble;
 
 /**
  * Interface for all MDP state representations.
@@ -35,5 +35,5 @@ public interface MDPState {
      * @param xiAction - the action to be performed in the given state.
      * @param xoReward - wrapper for the reward, which is valid on exit.
      */
-    public MDPState perform(int xiAction, MutableInt xoReward);
+    public MDPState perform(int xiAction, MutableDouble xoReward);
 }

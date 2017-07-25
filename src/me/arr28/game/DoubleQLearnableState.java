@@ -1,6 +1,8 @@
 package me.arr28.game;
 
-import me.arr28.util.MutableInt;
+import java.util.Random;
+
+import me.arr28.util.MutableDouble;
 
 /**
  * Interface state representations for "small" MDPs (where the whole state space fits in memory).
@@ -10,7 +12,7 @@ import me.arr28.util.MutableInt;
 public interface DoubleQLearnableState extends MDPState {
 
     @Override
-    public DoubleQLearnableState perform(int xiAction, MutableInt xoReward);
+    public DoubleQLearnableState perform(int xiAction, MutableDouble xoReward);
 
     /**
      * @return the current Q-value for the specified action.
@@ -47,6 +49,9 @@ public interface DoubleQLearnableState extends MDPState {
      * A base-class that implements the methods of this interface.
      */
     public static abstract class QLearnableBaseState implements DoubleQLearnableState {
+        private static final Random RANDOM = new Random(); // Small random values used for tie-breaking
+        private static final double EPSILON = 1e-6;
+
         protected final double[][] mQValues;
 
         protected QLearnableBaseState(int xiNumActions) {
@@ -55,7 +60,7 @@ public interface DoubleQLearnableState extends MDPState {
 
         @Override
         public double getActionQ(boolean xiUsePrimaryQ, int xiAction) {
-            return mQValues[xiUsePrimaryQ ? 0 : 1][xiAction];
+            return mQValues[xiUsePrimaryQ ? 0 : 1][xiAction] + (RANDOM.nextDouble() * EPSILON);
         }
 
         @Override
@@ -68,8 +73,8 @@ public interface DoubleQLearnableState extends MDPState {
             double lBestValue = Double.NEGATIVE_INFINITY;
             int lBestAction = -1;
             for (int lAction = 0; lAction < mQValues[xiUsePrimaryQ ? 0 : 1].length; lAction++) {
-                if (mQValues[xiUsePrimaryQ ? 0 : 1][lAction] > lBestValue) {
-                    lBestValue = mQValues[xiUsePrimaryQ ? 0 : 1][lAction];
+                if (getActionQ(xiUsePrimaryQ, lAction) > lBestValue) {
+                    lBestValue = getActionQ(xiUsePrimaryQ, lAction);
                     lBestAction = lAction;
                 }
             }
@@ -79,8 +84,8 @@ public interface DoubleQLearnableState extends MDPState {
         @Override
         public double getBestActionValue(boolean xiUsePrimaryQ) {
             double lBestValue = Double.NEGATIVE_INFINITY;
-            for (double lActionValue : mQValues[xiUsePrimaryQ ? 0 : 1]) {
-                lBestValue = Math.max(lBestValue, lActionValue);
+            for (int lAction = 0; lAction < mQValues[xiUsePrimaryQ ? 0 : 1].length; lAction++) {
+                lBestValue = Math.max(lBestValue, getActionQ(xiUsePrimaryQ, lAction));
             }
             return lBestValue;
         }
