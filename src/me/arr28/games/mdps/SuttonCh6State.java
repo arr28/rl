@@ -11,8 +11,10 @@ public class SuttonCh6State extends QLearnableBaseState {
 
     private static final Random RANDOM = new Random();
 
+    private static final int B_ACTIONS = 100000;
+
     private static SuttonCh6State A = new SuttonCh6State(2);
-    private static SuttonCh6State B = new SuttonCh6State(1);
+    private static SuttonCh6State B = new SuttonCh6State(B_ACTIONS);
     private static SuttonCh6State T = new SuttonCh6State(1);
 
     private SuttonCh6State(int xiNumActions) {
@@ -49,7 +51,7 @@ public class SuttonCh6State extends QLearnableBaseState {
             return 2;
         }
         assert (this == B);
-        return 1;
+        return B_ACTIONS;
     }
 
     @Override
@@ -69,6 +71,15 @@ public class SuttonCh6State extends QLearnableBaseState {
         @Override
         public DoubleQLearnableState createInitialState() {
             return A;
+        }
+    }
+
+    public static void reset() {
+        for (boolean lPrimary : new boolean[] { true, false }) {
+            A.setActionQ(lPrimary, 0, 0);
+            A.setActionQ(lPrimary, 1, 0);
+            B.setActionQ(lPrimary, 0, 0);
+            T.setActionQ(lPrimary, 0, 0);
         }
     }
 }

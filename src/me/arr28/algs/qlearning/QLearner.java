@@ -32,7 +32,7 @@ public class QLearner {
         return lTotalReward;
     }
 
-    private int chooseAction(DoubleQLearnableState xiState) {
+    protected int chooseAction(DoubleQLearnableState xiState) {
         // Epsilon-greedy
         if (RANDOM.nextDouble() < mEpsilon) {
             return RANDOM.nextInt(xiState.getNumLegalActions());
@@ -40,7 +40,7 @@ public class QLearner {
         return xiState.getBestAction(true);
     }
 
-    private void learn(DoubleQLearnableState xiOld, int xiAction, DoubleQLearnableState xiNew, double xiReward) {
+    protected void learn(DoubleQLearnableState xiOld, int xiAction, DoubleQLearnableState xiNew, double xiReward) {
         // Q-learning update
         double lOldQ = xiOld.getActionQ(true, xiAction);
         double lNewQ = lOldQ + mAlpha * (xiReward + xiNew.getBestActionValue(true) - lOldQ);
