@@ -6,13 +6,13 @@ import me.arr28.algs.mcts.zeroalloc.LRUCachable;
 import me.arr28.algs.mcts.zeroalloc.LRUCache;
 import me.arr28.game.GameState;
 import me.arr28.game.GameStateFactory;
-import me.arr28.games.FastConnect4State.FastC4GameStateFactory;
+import me.arr28.games.BreakthroughState.BreakthroughGameStateFactory;
 
 public class Solver
 {
   public static final int MAX_DEPTH = 50;
-  public static final int MAX_ACTIONS = 7;
-  public static final int MAX_CACHE_SIZE = 10_000_000;
+  public static final int MAX_ACTIONS = 24;
+  public static final int MAX_CACHE_SIZE = 800_000;
   public static final boolean DO_ONE_MOVE_LOOKAHEAD = true;
 
   public static class CachableState implements LRUCachable<GameState, CachableState>
@@ -37,7 +37,8 @@ public class Solver
     }
   }
 
-  private final GameStateFactory mGameStateFactory = new FastC4GameStateFactory();
+  // private final GameStateFactory mGameStateFactory = new FastC4GameStateFactory();
+  private final GameStateFactory mGameStateFactory = new BreakthroughGameStateFactory();
   private final LRUCache<GameState, CachableState> mCache = new LRUCache<>(MAX_CACHE_SIZE);
 
   private long mTerminalStatesVisited;
