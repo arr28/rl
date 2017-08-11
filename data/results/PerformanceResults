@@ -1,0 +1,58 @@
+3,000,000 iterations of the dummy game with branching factor 7.  Results are best of 3 trials.
+UCB1 Selection Policy, Simple Expand Policy, Dummy Rollout Policy, Simple Update Policy
+
+1 thread(s) performed 247573 iterations/s (100%)
+2 thread(s) performed 382427 iterations/s (154%)
+3 thread(s) performed 516351 iterations/s (208%)
+4 thread(s) performed 569881 iterations/s (230%)
+
+2. +UCB1 Approx
+1 thread(s) performed 387867 iterations/s (100%)
+2 thread(s) performed 450887 iterations/s (116%)
+3 thread(s) performed 594428 iterations/s (153%)
+4 thread(s) performed 721699 iterations/s (186%)
+
+3. Use AtomicLong for mSelectCount (instead of LongAdder)
+1 thread(s) performed 402606 iterations/s (100%)
+2 thread(s) performed 619382 iterations/s (153%)
+3 thread(s) performed 719142 iterations/s (178%)
+4 thread(s) performed 850334 iterations/s (211%)
+
+4. Use AtomicLongFieldUpdater for mSelectCount
+1 thread(s) performed  418855 iterations/s (100%)
+2 thread(s) performed  687750 iterations/s (164%)
+3 thread(s) performed  907393 iterations/s (216%)
+4 thread(s) performed 1136145 iterations/s (271%)
+
+5. Use AtomicLongFieldUpdater (+double "casting") for mTotalReward
+1 thread(s) performed  449101 iterations/s (100%)
+2 thread(s) performed  771211 iterations/s (171%)
+3 thread(s) performed  988383 iterations/s (220%)
+4 thread(s) performed 1349067 iterations/s (300%)
+
+At this point, CPU sampling shows...
+
+- 80% CHM.putIfAbsent
+- 10% UCB1ApproxSelectPolicy.select()
+-  8% TreeNode.reset()
+-  1% MCTSTree.iterate()
+
+Same code but doing a quick sanity check on C4 (of unknown size ;-()
+
+1 thread(s) performed 217956 iterations/s (100%)
+2 thread(s) performed 382538 iterations/s (175%)
+3 thread(s) performed 577038 iterations/s (264%)
+4 thread(s) performed 686979 iterations/s (315%)
+
+6. [No improvement] Using org.eclipse.collections.impl.map.mutable.ConcurrentHashMap
+1 thread(s) performed 436017 iterations/s (100%)
+2 thread(s) performed 752177 iterations/s (172%)
+3 thread(s) performed 944347 iterations/s (216%)
+4 thread(s) performed 1324352 iterations/s (303%)
+
+!! For investigation:
+
+For pure rollouts, CONNECT4 does ~1M/s and CONNECT4FAST does ~2M/s.  However, when combined with UCB_APPROX, the former
+is ~25% faster.
+
+  
