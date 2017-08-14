@@ -161,7 +161,7 @@ def load_lg_dataset():
   match = bt.Breakthrough()
 
   # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
-  raw_lg_data = open('../data/training/breakthrough.txt', 'r')
+  raw_lg_data = open('../data/training/breakthrough.txt', 'r', encoding='latin1')
   for line in raw_lg_data:
     if line.startswith('1.') and '20.' in line:
       num_matches += 1
