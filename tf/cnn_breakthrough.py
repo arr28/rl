@@ -1,5 +1,18 @@
 """Breakthrough CNN."""
 
+# !! ARR Ideas for improvement
+#
+# - Do the one-hot split up-front, rather than via the graph (interacts with how we deal with the same state but different moves)
+# - Try a different optimizer (ADAM seems to be the optimizer of choice)
+# - Measure prediction speed (how would it do in a Monte Carlo rollout?)
+# - Add more C-layers to the model
+# - Change the number of filters in each layer
+# - Add more D-layers to the model?
+# - Add reflections to the dataset
+# - Deal with different moves made from the same state (and check interaction with reflections)
+# - Ensure that states (& reflections) don't appear in both training & validation sets (avoid misleading results due to memoization)
+# - Exclude illegal moves when doing evaluation (pick best legal move)
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -23,33 +36,45 @@ def cnn_model_fn(features, labels, mode):
   input_layer = tf.reshape(features["x"], [-1, 8, 8, 2])
 
   # Convolutional Layer #1
-  # Computes 32 features using a 5x5 filter with ReLU activation.
+  # Computes 64 features using a 5x5 filter with ReLU activation.
   # Padding is added to preserve width and height.
   # Input Shape: [batch_size, 8, 8, 2]
-  # Output Shape: [batch_size, 8, 8, 32]
+  # Output Shape: [batch_size, 8, 8, 64]
   conv1 = tf.layers.conv2d(
       inputs=input_layer,
-      filters=32,
+      filters=64,
       kernel_size=[5, 5],
       padding="same",
       activation=tf.nn.relu)
 
   # Convolutional Layer #2
-  # Computes 64 features using a 3x3 filter.
+  # Computes 128 features using a 3x3 filter.
   # Padding is added to preserve width and height.
-  # Input Tensor Shape: [batch_size, 8, 8, 32]
-  # Output Tensor Shape: [batch_size, 8, 8, 64]
+  # Input Tensor Shape: [batch_size, 8, 8, 64]
+  # Output Tensor Shape: [batch_size, 8, 8, 128]
   conv2 = tf.layers.conv2d(
       inputs=conv1,
-      filters=64,
+      filters=128,
+      kernel_size=[3, 3],
+      padding="same",
+      activation=tf.nn.relu)
+
+  # Convolutional Layer #3
+  # Computes 128 features using a 3x3 filter.
+  # Padding is added to preserve width and height.
+  # Input Tensor Shape: [batch_size, 8, 8, 128]
+  # Output Tensor Shape: [batch_size, 8, 8, 128]
+  conv3 = tf.layers.conv2d(
+      inputs=conv2,
+      filters=128,
       kernel_size=[3, 3],
       padding="same",
       activation=tf.nn.relu)
 
   # Flatten tensor into a batch of vectors
-  # Input Tensor Shape: [batch_size, 8, 8, 64]
-  # Output Tensor Shape: [batch_size, 8 * 8 * 64]
-  flattened = tf.reshape(conv2, [-1, 8 * 8 * 64])
+  # Input Tensor Shape: [batch_size, 8, 8, 128]
+  # Output Tensor Shape: [batch_size, 8 * 8 * 128]
+  flattened = tf.reshape(conv3, [-1, 8 * 8 * 128])
 
   # Dense Layer
   # Densely connected layer with 1024 neurons
@@ -83,7 +108,7 @@ def cnn_model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.1) # !! ARR Was 0.001.  Try tf.train.AdamOptimizer(learning_rate=0.001)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -168,6 +193,7 @@ def main(unused_argv):
 
   # Split into training and validation sets.
   print('Shuffling data')
+  np.random.seed(0) # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming training.
   rng_state = np.random.get_state()
   np.random.shuffle(all_data)
   np.random.set_state(rng_state)
@@ -183,7 +209,7 @@ def main(unused_argv):
   # Create the Estimator
   print('Building model')
   classifier = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, model_dir="/tmp/breakthrough_convnet_model")
+      model_fn=cnn_model_fn, model_dir="/tmp/bt_current")
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
@@ -191,7 +217,7 @@ def main(unused_argv):
   logging_hook = tf.train.LoggingTensorHook(
       tensors=tensors_to_log, every_n_iter=50)
 
-  for iter in range(100):
+  for iter in range(50):
     # Train the model
     print('Training model')
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
@@ -202,7 +228,7 @@ def main(unused_argv):
         shuffle=True)
     classifier.train(
         input_fn=train_input_fn,
-        steps=200,
+        steps=2000,
         hooks=[logging_hook])
 
     # Evaluate the model and print results
