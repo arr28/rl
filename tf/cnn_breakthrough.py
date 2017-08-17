@@ -33,7 +33,7 @@ def cnn_model_fn(features, labels, mode):
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
   # MNIST images are 28x28 pixels, and have one color channel
-  input_layer = tf.reshape(features["x"], [-1, 8, 8, 2])
+  input_layer = tf.reshape(features["x"], [-1, 8, 8, 6])
 
   # Convolutional Layer #1
   # Computes 64 features using a 5x5 filter with ReLU activation.
@@ -140,15 +140,20 @@ def convert_move_to_index(move):
   return index
 
 def convert_state_to_nn_input(state):
-  # Use a simple 8 x 8 x 3 representation of the state.
-  # - Channel 1: The pieces (!! consider changing to an ours vs theirs representation)
-  # - Channel 2: Player to play
-  nn_input = np.empty((8, 8, 2), dtype=DATA_TYPE)
-  np.copyto(nn_input[:,:,0:1].reshape(8, 8), state.grid)  
+  nn_input = np.empty((8, 8, 6), dtype=DATA_TYPE)
   if state.player == 0:
-    np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
+    np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
+    np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
+    np.copyto(nn_input[:,:,2:3].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
   else:
-    np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
+    np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
+    np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
+    np.copyto(nn_input[:,:,2:3].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
+
+  np.copyto(nn_input[:,:,3:4].reshape(8, 8), np.equal(state.grid, np.full((8,8), 2)))
+  np.copyto(nn_input[:,:,4:5].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
+  np.copyto(nn_input[:,:,5:6].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
+
   return nn_input
 
 def load_lg_dataset():
