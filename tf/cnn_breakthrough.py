@@ -3,7 +3,6 @@
 # !! ARR Ideas for improvement
 #
 # - Do the one-hot split up-front, rather than via the graph (interacts with how we deal with the same state but different moves)
-# - Try a different optimizer (ADAM seems to be the optimizer of choice)
 # - Measure prediction speed (how would it do in a Monte Carlo rollout?)
 # - Add more C-layers to the model
 # - Change the number of filters in each layer
@@ -108,7 +107,7 @@ def cnn_model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.1) # !! ARR Was 0.001.  Try tf.train.AdamOptimizer(learning_rate=0.001)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
