@@ -213,7 +213,7 @@ def main(unused_argv):
   # Create the Estimator
   print('Building model')
   classifier = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, model_dir="/tmp/bt_current")
+      model_fn=cnn_model_fn, model_dir="/tmp/bt/current")
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
