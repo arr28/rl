@@ -127,7 +127,7 @@ def dbg(string):
   None
 
 def decode_move(move):
-  (src, dst) = move
+  (src, dst) = re.split('x|\-', move)
   src_col = ord(src[0]) - ord('a')
   src_row = ord(src[1]) - ord('1')
   dst_col = ord(dst[0]) - ord('a')
@@ -140,12 +140,21 @@ def convert_move_to_index(move):
   index += 1 + dst_col - src_col # (left, forward, right) => (0, 1, 2)
   return index
 
-def convert_index_to_move(index):
-  direction = (index % 3) - 1
+def convert_index_to_move(index, player):
+  dir = (index % 3) - 1
   index = int(index / 3)
-  src_col = index % 8
-  src_row = int(index / 8)
-  print("row=%d, col=%d, dir=%d" % (src_row, src_col, direction))
+  src_col_ix = index % 8
+  src_row_ix = int(index / 8)
+  dst_col_ix = src_col_ix + dir
+  dst_row_ix = src_row_ix + 1 if player == 0 else src_row_ix - 1
+   
+  src_col = chr(src_col_ix + ord('a'))
+  src_row = chr(src_row_ix + ord('1'))
+  dst_col = chr(dst_col_ix + ord('a'))
+  dst_row = chr(dst_row_ix + ord('1'))
+  
+  # print("%s%s %s" % (src_col, src_row, direction))
+  return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
 
 def convert_state_to_nn_input(state):
   nn_input = np.empty((8, 8, 6), dtype=DATA_TYPE)
@@ -187,7 +196,7 @@ def load_lg_dataset():
           num_moves += 1
           if num_moves % 10000 == 0:
               print(".", end='', flush=True)
-          move = decode_move(re.split('x|\-', part))
+          move = decode_move(part)
 
           # Add a training example
           data.append(convert_state_to_nn_input(match))
@@ -206,14 +215,18 @@ def predict():
   print('Building model')
   classifier = tf.estimator.Estimator(
       model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
-  predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(bt.Breakthrough())}, shuffle=False)
+  
+  # Advance the game to the desired state
+  state = bt.Breakthrough()
+  state.apply(decode_move("d2-d3"))
+  
+  # Predict the next move
+  predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
   predictions = classifier.predict(input_fn=predict_input_fn)
-  for index, prediction in enumerate(predictions):
-    print("Full prediction is...")  
-    print(prediction)
-    best_move = np.argmax(prediction["probabilities"])
-    print("Best move is %d" % (best_move))
-    convert_index_to_move(best_move)
+  for _, prediction in enumerate(predictions):
+    sorted_indices = np.argsort(prediction["probabilities"])[::-1][0:5]
+    for index in sorted_indices:
+      print("Play %s with probability %f" % (convert_index_to_move(index, state.player), prediction["probabilities"][index]))
   
 def train():
   # Load the data
