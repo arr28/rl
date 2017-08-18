@@ -225,8 +225,11 @@ def predict():
       model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
   
   # Advance the game to the desired state
+  line ='1. h2-g3 h7-g6 2. c2-d3 g7-f6 3. e2-f3 e7-e6 4. b2-c3 d7-d6 *'
   state = bt.Breakthrough()
-  state.apply(decode_move("d2-d3"))
+  for part in line.split(' '):
+      if len(part) == 5:
+          state.apply(decode_move(part))
   
   # Predict the next move
   predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
