@@ -140,6 +140,13 @@ def convert_move_to_index(move):
   index += 1 + dst_col - src_col # (left, forward, right) => (0, 1, 2)
   return index
 
+def convert_index_to_move(index):
+  direction = (index % 3) - 1
+  index = int(index / 3)
+  src_col = index % 8
+  src_row = int(index / 8)
+  print("row=%d, col=%d, dir=%d" % (src_row, src_col, direction))
+
 def convert_state_to_nn_input(state):
   nn_input = np.empty((8, 8, 6), dtype=DATA_TYPE)
   if state.player == 0:
@@ -194,7 +201,21 @@ def load_lg_dataset():
   print('\nLoaded %d moves from %d matches (avg. %d moves/match)' % (num_moves, num_matches, num_moves / num_matches))
   return (np.array(data), np.array(labels))
 
-def main(unused_argv):
+def predict():
+  # Create the Estimator
+  print('Building model')
+  classifier = tf.estimator.Estimator(
+      model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
+  predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(bt.Breakthrough())}, shuffle=False)
+  predictions = classifier.predict(input_fn=predict_input_fn)
+  for index, prediction in enumerate(predictions):
+    print("Full prediction is...")  
+    print(prediction)
+    best_move = np.argmax(prediction["probabilities"])
+    print("Best move is %d" % (best_move))
+    convert_index_to_move(best_move)
+  
+def train():
   # Load the data
   (all_data, all_labels) = load_lg_dataset()
   samples = len(all_data);  
@@ -249,5 +270,17 @@ def main(unused_argv):
     eval_results = classifier.evaluate(input_fn=eval_input_fn)
     print(eval_results)
 
+def main(argv):
+  handled = False;
+  if len(argv) > 1:
+    if argv[1] == 'train':
+      handled = True
+      train()
+    elif argv[1] == 'predict':
+      handled = True
+      predict()
+  if not handled:
+    print('Please specify a valid command (e.g. train or predict)')
+  
 if __name__ == "__main__":
   tf.app.run()
