@@ -157,17 +157,25 @@ def convert_index_to_move(index, player):
   return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
 
 def convert_state_to_nn_input(state):
+  # 6-channel 8x8 network
+  # 
+  # 1. Player's own pieces
+  # 2. Opponent's pieces
+  # 3. Empty squares
+  # 4. Player to play
+  # 5. Zeros
+  # 6. Ones
+
   nn_input = np.empty((8, 8, 6), dtype=DATA_TYPE)
   if state.player == 0:
     np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
     np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
-    np.copyto(nn_input[:,:,2:3].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
   else:
     np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
     np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
-    np.copyto(nn_input[:,:,2:3].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
 
-  np.copyto(nn_input[:,:,3:4].reshape(8, 8), np.equal(state.grid, np.full((8,8), 2)))
+  np.copyto(nn_input[:,:,2:3].reshape(8, 8), np.equal(state.grid, np.full((8,8), 2)))
+  np.copyto(nn_input[:,:,3:4].reshape(8, 8), np.full((8,8), state.player))
   np.copyto(nn_input[:,:,4:5].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
   np.copyto(nn_input[:,:,5:6].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
 
