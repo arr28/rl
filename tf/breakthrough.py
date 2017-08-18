@@ -1,6 +1,8 @@
 """Breakthrough game state (mutable)"""
 
 import numpy as np
+from hashlib import md5
+from sklearn.externals import joblib
 
 class Breakthrough:
   def __init__(self):
@@ -40,3 +42,16 @@ class Breakthrough:
       pretty += '\n'
     pretty += "Player %d to play\n" % (self.player + 1)
     return pretty
+
+  def __eq__(self, other):
+    if isinstance(other, self.__class__):
+      return self.player == other.player and np.all(self.grid == other.grid)
+    else:
+      return False
+    
+  def __ne__(self, other):
+    return not self.__eq__(other)
+  
+  def __hash__(self):
+    print("Hashes are %d : %d" % (int(joblib.hash(self.grid), 16), int(joblib.hash(self.grid), 16) ^ self.player))
+    return int(joblib.hash(self.grid), 16) ^ self.player
