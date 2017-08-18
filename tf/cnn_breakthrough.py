@@ -18,8 +18,10 @@ from __future__ import print_function
 
 import breakthrough as bt
 import numpy as np
+import os
 import re
 import sys
+import tempfile
 import tensorflow as tf
 
 ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
@@ -165,6 +167,7 @@ def load_lg_dataset():
   match = bt.Breakthrough()
 
   # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
+  print('Loading data', end='', flush=True)
   raw_lg_data = open('../data/training/breakthrough.txt', 'r', encoding='latin1')
   for line in raw_lg_data:
     if line.startswith('1.') and '20.' in line:
@@ -175,6 +178,8 @@ def load_lg_dataset():
       for part in line.split(' '):
         if len(part) == 5:
           num_moves += 1
+          if num_moves % 10000 == 0:
+              print(".", end='', flush=True)
           move = decode_move(re.split('x|\-', part))
 
           # Add a training example
@@ -186,12 +191,11 @@ def load_lg_dataset():
           dbg(part)
           dbg(match)
 
-  print('Loaded %d moves from %d matches (avg. %d moves/match)' % (num_moves, num_matches, num_moves / num_matches))
+  print('\nLoaded %d moves from %d matches (avg. %d moves/match)' % (num_moves, num_matches, num_moves / num_matches))
   return (np.array(data), np.array(labels))
 
 def main(unused_argv):
   # Load the data
-  print('Loading data')
   (all_data, all_labels) = load_lg_dataset()
   samples = len(all_data);  
 
@@ -213,7 +217,7 @@ def main(unused_argv):
   # Create the Estimator
   print('Building model')
   classifier = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, model_dir="/tmp/bt/current")
+      model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
