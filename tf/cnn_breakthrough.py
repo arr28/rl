@@ -229,10 +229,11 @@ def load_lg_dataset():
           # Process the move to get the new state
           match = bt.Breakthrough(match, move)
 
-  print('\nLoaded %d moves from %d matches (avg. %d moves/match) with %d duplicate hits' % 
+  print('\n  Loaded %d moves from %d matches (avg. %d moves/match) with %d duplicate hits' % 
     (num_moves, num_matches, num_moves / num_matches, num_duplicate_hits))
   
   # Normalise the action probabilities
+  print('  Normalising data')
   for action_probs in iter(data.values()):
     total = action_probs.sum()
     for ii in range(ACTIONS):
@@ -280,28 +281,32 @@ def train():
   # Load the data
   all_data = load_lg_dataset()
   samples = len(all_data);
-  states = np.empty((samples, 8, 8, 6), dtype=DATA_TYPE)
+  print('  Sorting data')
+  states = sorted(all_data.keys())
+  nn_states = np.empty((samples, 8, 8, 6), dtype=DATA_TYPE)
   action_probs = np.empty((samples, ACTIONS), dtype=DATA_TYPE)
   ii = 0
-  for state, actions in all_data.items():
-    convert_state_to_nn_input(state, states[ii:ii+1].reshape((8, 8, 6)))
-    np.copyto(action_probs[ii:ii+1].reshape(ACTIONS), actions)
+  for state in states:
+    convert_state_to_nn_input(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
+    np.copyto(action_probs[ii:ii+1].reshape(ACTIONS), all_data[state])
     ii += 1
     
   # Split into training and validation sets.
-  print('Shuffling data')
-  np.random.seed(0) # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming training.
+  # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming
+  # training.  Otherwise the evaluation data in the 2nd run is data that the network has already seen in the 1st.
+  print('  Shuffling data consistently')
+  np.random.seed(0)
   rng_state = np.random.get_state()
-  np.random.shuffle(states)
+  np.random.shuffle(nn_states)
   np.random.set_state(rng_state)
   np.random.shuffle(action_probs)
 
-  print('Splitting data')
+  print('  Splitting data')
   split_point = int(samples * 0.8)
-  train_states = states[:split_point]
+  train_states = nn_states[:split_point]
   train_action_probs = action_probs[:split_point]
-  eval_states = states[split_point:]
-  eval_labels = action_probs[split_point:] # !! ARR Need to do argmax to produce labels (+possible fix network)
+  eval_states = nn_states[split_point:]
+  eval_labels = action_probs[split_point:]
   print('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   # Create the Estimator

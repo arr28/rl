@@ -60,9 +60,9 @@ class Breakthrough:
     for row in reversed(range(8)):
       for col in range(8):
         if self.grid[row][col] == 0:
-          pretty += 'v '
-        elif self.grid[row][col] == 1:
           pretty += '^ '
+        elif self.grid[row][col] == 1:
+          pretty += 'v '
         else:
           pretty += '  '
       pretty += '\n'
@@ -78,6 +78,13 @@ class Breakthrough:
   def __ne__(self, other):
     return not self.__eq__(other)
   
+  def __lt__(self, other):
+    for row in range(8):
+      for col in range(8):
+        if self.grid[row][col] != other.grid[row][col]:
+          return self.grid[row][col] < other.grid[row][col]    
+    return self.player < other.player
+      
   def __hash__(self):
     return int(self.zhash)
 
