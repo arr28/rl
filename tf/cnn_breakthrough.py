@@ -109,7 +109,7 @@ def cnn_model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.00001)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -121,10 +121,6 @@ def cnn_model_fn(features, labels, mode):
           labels=labels, predictions=predictions["classes"])}
   return tf.estimator.EstimatorSpec(
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
-
-def dbg(string):
-  #print(string)
-  None
 
 def decode_move(move):
   (src, dst) = re.split('x|\-', move)
@@ -182,13 +178,14 @@ def convert_state_to_nn_input(state):
   return nn_input
 
 def load_lg_dataset():
-  data = []
+  data = {}
+  states = []
   labels = []
 
   num_matches = 0
   num_moves = 0
-
-  match = bt.Breakthrough()
+  num_duplicate_states = 0
+  num_duplicate_hits = 0
 
   # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
   print('Loading data', end='', flush=True)
@@ -196,9 +193,7 @@ def load_lg_dataset():
   for line in raw_lg_data:
     if line.startswith('1.') and '20.' in line:
       num_matches += 1
-      match.reset()
-      dbg('-----------------')
-      dbg(match)
+      match = bt.Breakthrough()
       for part in line.split(' '):
         if len(part) == 5:
           num_moves += 1
@@ -207,17 +202,35 @@ def load_lg_dataset():
           move = decode_move(part)
 
           # Add a training example
-          data.append(convert_state_to_nn_input(match))
+          if match in data:
+            num_duplicate_hits += 1
+            if data[match] == 1:
+              num_duplicate_states += 1
+            data[match] += 1
+          else:
+            data[match] = 1
+          states.append(convert_state_to_nn_input(match))
           labels.append(convert_move_to_index(move))
 
           # Process the move to get the new state
-          match.apply(move)
-          dbg(part)
-          dbg(match)
+          match = bt.Breakthrough(match, move)
 
-  print('\nLoaded %d moves from %d matches (avg. %d moves/match)' % (num_moves, num_matches, num_moves / num_matches))
-  return (np.array(data), np.array(labels))
+  print('\nLoaded %d moves from %d matches (avg. %d moves/match) with %d hits on %d duplicate states' % 
+    (num_moves, num_matches, num_moves / num_matches, num_duplicate_hits, num_duplicate_states))
+  return (np.array(states), np.array(labels))
 
+def rollout(classifier, state):
+  for _ in range(10):
+    predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
+    predictions = classifier.predict(input_fn=predict_input_fn)
+    prediction = next(predictions)
+    #for _, prediction in enumerate(predictions):
+    index = np.argmax(prediction["probabilities"])
+    str_move = convert_index_to_move(index, state.player)
+    print(state)
+    print("Play %s with probability %f" % (str_move, prediction["probabilities"][index]))
+    state = bt.Breakthrough(state, decode_move(str_move))
+        
 def predict():
   # Create the Estimator
   print('Building model')
@@ -225,11 +238,12 @@ def predict():
       model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
   
   # Advance the game to the desired state
-  line ='1. h2-g3 h7-g6 2. c2-d3 g7-f6 3. e2-f3 e7-e6 4. b2-c3 d7-d6 *'
+  sys.stderr.flush()
+  history = input('Input game history: ')
   state = bt.Breakthrough()
-  for part in line.split(' '):
-      if len(part) == 5:
-          state.apply(decode_move(part))
+  for part in history.split(' '):
+    if len(part) == 5:
+      state = bt.Breakthrough(state, decode_move(part))
   
   # Predict the next move
   predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
@@ -238,10 +252,13 @@ def predict():
     sorted_indices = np.argsort(prediction["probabilities"])[::-1][0:5]
     for index in sorted_indices:
       print("Play %s with probability %f" % (convert_index_to_move(index, state.player), prediction["probabilities"][index]))
+    _ = input('Press enter to play on')
+    rollout(classifier, state)
   
 def train():
   # Load the data
   (all_data, all_labels) = load_lg_dataset()
+  sys.exit()
   samples = len(all_data);  
 
   # Split into training and validation sets.
@@ -262,49 +279,47 @@ def train():
   # Create the Estimator
   print('Building model')
   classifier = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
+    model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
   tensors_to_log = {"probabilities": "softmax_tensor"}
-  logging_hook = tf.train.LoggingTensorHook(
-      tensors=tensors_to_log, every_n_iter=50)
+  logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log, every_n_iter=50)
 
   for iter in range(50):
     # Train the model
     print('Training model')
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
-        x={"x": train_data},
-        y=train_labels,
-        batch_size=100,
-        num_epochs=None,
-        shuffle=True)
+      x={"x": train_data},
+      y=train_labels,
+      batch_size=100,
+      num_epochs=None,
+      shuffle=True)
     classifier.train(
-        input_fn=train_input_fn,
-        steps=2000,
-        hooks=[logging_hook])
+      input_fn=train_input_fn,
+      steps=2000,
+      hooks=[logging_hook])
 
     # Evaluate the model and print results
     print('Evaluating model')
     eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-        x={"x": eval_data},
-        y=eval_labels,
-        num_epochs=1,
-        shuffle=False)
+      x={"x": eval_data},
+      y=eval_labels,
+      num_epochs=1,
+      shuffle=False)
     eval_results = classifier.evaluate(input_fn=eval_input_fn)
     print(eval_results)
 
 def main(argv):
   handled = False;
-  if len(argv) > 1:
-    if argv[1] == 'train':
+  while not handled:
+    cmd = input("Train (t) or predict (p)? ").lower()
+    if cmd == 'train' or cmd == 't':
       handled = True
       train()
-    elif argv[1] == 'predict':
+    elif cmd == 'predict' or cmd == 'p':
       handled = True
       predict()
-  if not handled:
-    print('Please specify a valid command (e.g. train or predict)')
   
 if __name__ == "__main__":
   tf.app.run()

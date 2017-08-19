@@ -1,37 +1,64 @@
 """Breakthrough game state (mutable)"""
 
 import numpy as np
-from hashlib import md5
-from sklearn.externals import joblib
+import random
+
+Z_HASHES = np.zeros((8, 8, 3), dtype=np.int64)
+ZERO_HASH = 0
+
+def __static_init():
+  global Z_HASHES
+  global ZERO_HASH
+  for row in range(8):
+    for col in range(8):
+      for val in range(3):
+        Z_HASHES[row][col][val] = random.getrandbits(63)
+        if val == 0:
+          ZERO_HASH ^= Z_HASHES[row][col][val]
+  print("Hash for board full of 0 = %d " % (ZERO_HASH))
 
 class Breakthrough:
-  def __init__(self):
-    self.grid = np.zeros((8, 8), dtype=np.float32)
-    self.player = 0
-    self.reset()
+       
+  def __init__(self, parent_state=None, move_to_apply=None):
+    if parent_state is None:
+      self.grid = np.zeros((8, 8), dtype=np.int8)
+      self.zhash = ZERO_HASH
+      self.player = 0
+      self.__reset()
+    else:
+      self.grid = np.copy(parent_state.grid)
+      self.zhash = parent_state.zhash
+      self.player = parent_state.player
+      self.__apply(move_to_apply)
+    self.grid.setflags(write = False)
 
-  def reset(self):
+  def __set_cell(self, row, col, val):
+    self.zhash ^= Z_HASHES[row][col][self.grid[row][col]]
+    self.grid[row][col] = val
+    self.zhash ^= Z_HASHES[row][col][val]
+    
+  def __reset(self):
     # Reset the grid to the starting position.  The first two rows are filled with player 1's pawns.  The last 2 rows are filled with player 2's pawns.
     # All the other cells are empty.
     for row in range(8):
       for col in range(8):
         if (row == 0) or (row == 1):
-          self.grid[row][col] = 0
+          self.__set_cell(row, col, 0)
         elif (row == 6) or (row == 7):
-          self.grid[row][col] = 1
+          self.__set_cell(row, col, 1)
         else:
-          self.grid[row][col] = 2
+          self.__set_cell(row, col, 2)
     self.player = 0
 
-  def apply(self, move):
+  def __apply(self, move):
     (src_row, src_col, dst_row, dst_col) = move
-    self.grid[src_row][src_col] = 2;           # Vacate source cell
-    self.grid[dst_row][dst_col] = self.player; # Occupy target cell
-    self.player = 1 - self.player              # Other player's turn
+    self.__set_cell(src_row, src_col, 2);           # Vacate source cell
+    self.__set_cell(dst_row, dst_col, self.player); # Occupy target cell
+    self.player = 1 - self.player                   # Other player's turn
 
   def __str__(self):
     pretty = ''
-    for row in range(8):
+    for row in reversed(range(8)):
       for col in range(8):
         if self.grid[row][col] == 0:
           pretty += 'v '
@@ -53,5 +80,6 @@ class Breakthrough:
     return not self.__eq__(other)
   
   def __hash__(self):
-    print("Hashes are %d : %d" % (int(joblib.hash(self.grid), 16), int(joblib.hash(self.grid), 16) ^ self.player))
-    return int(joblib.hash(self.grid), 16) ^ self.player
+    return int(self.zhash)
+
+__static_init()
