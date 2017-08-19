@@ -1,7 +1,7 @@
 """Breakthrough game state (mutable)"""
 
+import hashlib
 import numpy as np
-import random
 
 Z_HASHES = np.zeros((8, 8, 3), dtype=np.int64)
 ZERO_HASH = 0
@@ -12,7 +12,7 @@ def __static_init():
   for row in range(8):
     for col in range(8):
       for val in range(3):
-        Z_HASHES[row][col][val] = random.getrandbits(63)
+        Z_HASHES[row][col][val] = int(hashlib.sha1(b'r%dc%dv%d' % (row, col, val)).hexdigest()[:15], 16)
         if val == 0:
           ZERO_HASH ^= Z_HASHES[row][col][val]
 
