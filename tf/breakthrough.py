@@ -15,7 +15,6 @@ def __static_init():
         Z_HASHES[row][col][val] = random.getrandbits(63)
         if val == 0:
           ZERO_HASH ^= Z_HASHES[row][col][val]
-  print("Hash for board full of 0 = %d " % (ZERO_HASH))
 
 class Breakthrough:
        

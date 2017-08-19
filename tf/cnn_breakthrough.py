@@ -26,7 +26,6 @@ import tensorflow as tf
 
 ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
 DATA_TYPE = np.float32
-LABEL_TYPE = np.int32
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -103,13 +102,11 @@ def cnn_model_fn(features, labels, mode):
     return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
   # Calculate Loss (for both TRAIN and EVAL modes)
-  onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=ACTIONS)
-  loss = tf.losses.softmax_cross_entropy(
-      onehot_labels=onehot_labels, logits=logits)
+  loss = tf.losses.softmax_cross_entropy(onehot_labels=labels, logits=logits)
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.00001)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -118,7 +115,7 @@ def cnn_model_fn(features, labels, mode):
   # Add evaluation metrics (for EVAL mode)
   eval_metric_ops = {
       "accuracy": tf.metrics.accuracy(
-          labels=labels, predictions=predictions["classes"])}
+          labels=tf.argmax(labels, axis=1), predictions=predictions["classes"])}
   return tf.estimator.EstimatorSpec(
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -152,7 +149,7 @@ def convert_index_to_move(index, player):
   # print("%s%s %s" % (src_col, src_row, direction))
   return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
 
-def convert_state_to_nn_input(state):
+def convert_state_to_nn_input(state, nn_input=np.empty((8, 8, 6), dtype=DATA_TYPE)):
   # 6-channel 8x8 network
   # 
   # 1. Player's own pieces
@@ -162,7 +159,6 @@ def convert_state_to_nn_input(state):
   # 5. Zeros
   # 6. Ones
 
-  nn_input = np.empty((8, 8, 6), dtype=DATA_TYPE)
   if state.player == 0:
     np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
     np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
@@ -174,7 +170,7 @@ def convert_state_to_nn_input(state):
   np.copyto(nn_input[:,:,3:4].reshape(8, 8), np.full((8,8), state.player))
   np.copyto(nn_input[:,:,4:5].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
   np.copyto(nn_input[:,:,5:6].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
-
+  
   return nn_input
 
 def load_lg_dataset():
@@ -188,7 +184,7 @@ def load_lg_dataset():
   print('Loading data', end='', flush=True)
   raw_lg_data = open('../data/training/breakthrough.txt', 'r', encoding='latin1')
   for line in raw_lg_data:
-    if line.startswith('1.') and '50.' in line:
+    if line.startswith('1.') and '20.' in line:
       num_matches += 1
       match = bt.Breakthrough()
       for part in line.split(' '):
@@ -210,8 +206,13 @@ def load_lg_dataset():
 
   print('\nLoaded %d moves from %d matches (avg. %d moves/match) with %d duplicate hits' % 
     (num_moves, num_matches, num_moves / num_matches, num_duplicate_hits))
-  action_probs = np.array(list(data.values()))
-  action_probs /= action_probs.sum()
+  
+  # Normalise the action probabilities
+  for action_probs in iter(data.values()):
+    total = action_probs.sum()
+    for ii in range(ACTIONS):
+      action_probs[ii] /= total
+      
   return data
 
 def rollout(classifier, state):
@@ -254,25 +255,30 @@ def train():
   # Load the data
   all_data = load_lg_dataset()
   samples = len(all_data);
-  # !! ARR Need to split data into states & action_probs.  Also need to change network to expect action probs (instead
-  # !! ARR of single labels) and also change evaluation (probably by producing labels for now).
-  sys.exit();  
-
+  states = np.empty((samples, 8, 8, 6), dtype=DATA_TYPE)
+  action_probs = np.empty((samples, ACTIONS), dtype=DATA_TYPE)
+  ii = 0
+  for state, actions in all_data.items():
+    convert_state_to_nn_input(state, states[ii:ii+1].reshape((8, 8, 6)))
+    np.copyto(action_probs[ii:ii+1].reshape(ACTIONS), actions)
+    ii += 1
+    
   # Split into training and validation sets.
   print('Shuffling data')
   np.random.seed(0) # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming training.
   rng_state = np.random.get_state()
-  np.random.shuffle(all_data)
+  np.random.shuffle(states)
   np.random.set_state(rng_state)
-  np.random.shuffle(all_labels)
+  np.random.shuffle(action_probs)
 
   print('Splitting data')
   split_point = int(samples * 0.8)
-  train_data = all_data[:split_point]
-  train_labels = all_labels[:split_point]
-  eval_data = all_data[split_point:]
-  eval_labels = all_labels[split_point:]
-
+  train_states = states[:split_point]
+  train_action_probs = action_probs[:split_point]
+  eval_states = states[split_point:]
+  eval_labels = action_probs[split_point:] # !! ARR Need to do argmax to produce labels (+possible fix network)
+  print('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
+  
   # Create the Estimator
   print('Building model')
   classifier = tf.estimator.Estimator(
@@ -283,24 +289,35 @@ def train():
   tensors_to_log = {"probabilities": "softmax_tensor"}
   logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log, every_n_iter=50)
 
-  for iter in range(50):
+  # Full run config
+  iters = 50
+  batch_size = 100
+  steps = 2000
+  
+  if False:
+    # Small run config (for testing)
+    iters = 1
+    batch_size = 10
+    steps = 50
+  
+  for iter in range(iters):
     # Train the model
     print('Training model')
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": train_data},
-      y=train_labels,
-      batch_size=100,
+      x={"x": train_states},
+      y=train_action_probs,
+      batch_size=batch_size,
       num_epochs=None,
       shuffle=True)
     classifier.train(
       input_fn=train_input_fn,
-      steps=2000,
+      steps=steps,
       hooks=[logging_hook])
 
     # Evaluate the model and print results
     print('Evaluating model')
     eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": eval_data},
+      x={"x": eval_states},
       y=eval_labels,
       num_epochs=1,
       shuffle=False)
