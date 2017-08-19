@@ -179,19 +179,16 @@ def convert_state_to_nn_input(state):
 
 def load_lg_dataset():
   data = {}
-  states = []
-  labels = []
 
   num_matches = 0
   num_moves = 0
-  num_duplicate_states = 0
   num_duplicate_hits = 0
 
   # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
   print('Loading data', end='', flush=True)
   raw_lg_data = open('../data/training/breakthrough.txt', 'r', encoding='latin1')
   for line in raw_lg_data:
-    if line.startswith('1.') and '20.' in line:
+    if line.startswith('1.') and '50.' in line:
       num_matches += 1
       match = bt.Breakthrough()
       for part in line.split(' '):
@@ -204,20 +201,18 @@ def load_lg_dataset():
           # Add a training example
           if match in data:
             num_duplicate_hits += 1
-            if data[match] == 1:
-              num_duplicate_states += 1
-            data[match] += 1
           else:
-            data[match] = 1
-          states.append(convert_state_to_nn_input(match))
-          labels.append(convert_move_to_index(move))
+            data[match] = np.zeros((ACTIONS), dtype=DATA_TYPE)
+          data[match][convert_move_to_index(move)] += 1
 
           # Process the move to get the new state
           match = bt.Breakthrough(match, move)
 
-  print('\nLoaded %d moves from %d matches (avg. %d moves/match) with %d hits on %d duplicate states' % 
-    (num_moves, num_matches, num_moves / num_matches, num_duplicate_hits, num_duplicate_states))
-  return (np.array(states), np.array(labels))
+  print('\nLoaded %d moves from %d matches (avg. %d moves/match) with %d duplicate hits' % 
+    (num_moves, num_matches, num_moves / num_matches, num_duplicate_hits))
+  action_probs = np.array(list(data.values()))
+  action_probs /= action_probs.sum()
+  return data
 
 def rollout(classifier, state):
   for _ in range(10):
@@ -257,9 +252,11 @@ def predict():
   
 def train():
   # Load the data
-  (all_data, all_labels) = load_lg_dataset()
-  sys.exit()
-  samples = len(all_data);  
+  all_data = load_lg_dataset()
+  samples = len(all_data);
+  # !! ARR Need to split data into states & action_probs.  Also need to change network to expect action probs (instead
+  # !! ARR of single labels) and also change evaluation (probably by producing labels for now).
+  sys.exit();  
 
   # Split into training and validation sets.
   print('Shuffling data')
