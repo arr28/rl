@@ -2,14 +2,11 @@
 
 # !! ARR Ideas for improvement
 #
-# - Do the one-hot split up-front, rather than via the graph (interacts with how we deal with the same state but different moves)
+# - Add reflections to the dataset (being careful about interactions with deduplication)
 # - Measure prediction speed (how would it do in a Monte Carlo rollout?)
 # - Add more C-layers to the model
 # - Change the number of filters in each layer
 # - Add more D-layers to the model?
-# - Add reflections to the dataset
-# - Deal with different moves made from the same state (and check interaction with reflections)
-# - Ensure that states (& reflections) don't appear in both training & validation sets (avoid misleading results due to memoization)
 # - Exclude illegal moves when doing evaluation (pick best legal move)
 
 from __future__ import absolute_import
@@ -174,17 +171,45 @@ def convert_state_to_nn_input(state, nn_input=np.empty((8, 8, 6), dtype=DATA_TYP
   return nn_input
 
 def load_lg_dataset():
+  # Starting ELO is 1500
+  good_players = {'wanderer_bot', 'Ray Garrison', 'ahhmet', 'edbonnet', 'halladba', 'turab 69', 'David Scott', # 2067
+                  'Mojmir Hanes', 'michelwav', 'luffy_bot', 'kingofthebesI', 'hammurabi', 'Stop_Sign', 'smilingface', # 1971
+                  'isketzo067', 'Diamante', 'antony', 'ypercube', 'Marius Halsor', 'bennok', 'Tim Shih', # 1878
+                  'Ragnar Wikman', 'Micco', 'kyle douglas', 'busybee', 'Zul Nadzri', 'Maciej Celuch', 'mungo', # 1820 
+                  'richyfourtytwo', 'Madris', 'MojoRising', 'Reiner Martin', 'Florian Jamain', 'z', 'wallachia', # 1770
+                  'Martyn Hamer', 'sZamBa_', 'MRFvR', 'm273cool', 'Chris', 'eaeaeapepe', 'gamesorry', 'Bernard Herwig', # 1747
+                  'Maurizio De Leo', 'rafi', 'Willem Gerritsen', 'Mirko Rahn', 'Elsabio', 'kfiecio', 'Nagy Fathy', # 1723
+                  'basplund', 'MathPickle', 'Jose M Grau Ribas', 'Matteo A.', 'Arty Sandler', 'dimitris', 'BigChicken', # 1682
+                  'Thomas', 'nietsabes', 'Dvd Avins', 'pim', 'Luca Bruzzi', 'Cassiel', 'emilioes', 'vstjrt', # 1653
+                  'Christian K', 'diego44', 'steve1964', 'lin1234', 'siroman', 'Tony', 'RoByN', 'slaapgraag', # 1641
+                  'Tobias Lang', 'Rex Moore', 'Jonas', 'Richard Malaschitz', 'I R I', 'Peter Koning', 'Ryan'} # 1616
   data = {}
 
   num_matches = 0
   num_moves = 0
   num_duplicate_hits = 0
 
+  white_matcher = re.compile('\[White "(.*)"\]')
+  black_matcher = re.compile('\[Black "(.*)"\]')
+  
   # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
   print('Loading data', end='', flush=True)
   raw_lg_data = open('../data/training/breakthrough.txt', 'r', encoding='latin1')
   for line in raw_lg_data:
-    if line.startswith('1.') and '20.' in line:
+    
+    if 'Event' in line:
+      white_good = False
+      black_good = False
+      
+    match = white_matcher.match(line)
+    if match:
+      white_good = match.group(1) in good_players
+
+    match = black_matcher.match(line)
+    if match:
+      black_good = match.group(1) in good_players
+      
+    if line.startswith('1.') and '20.' in line and white_good and black_good:
       num_matches += 1
       match = bt.Breakthrough()
       for part in line.split(' '):
