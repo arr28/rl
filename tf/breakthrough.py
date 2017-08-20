@@ -58,6 +58,7 @@ class Breakthrough:
   def __str__(self):
     pretty = ''
     for row in reversed(range(8)):
+      pretty += str(row + 1) + ' '
       for col in range(8):
         if self.grid[row][col] == 0:
           pretty += '^ '
@@ -66,6 +67,7 @@ class Breakthrough:
         else:
           pretty += '  '
       pretty += '\n'
+    pretty += "  a b c d e f g h\n"
     pretty += "Player %d to play\n" % (self.player + 1)
     return pretty
 
