@@ -242,16 +242,17 @@ def load_lg_dataset():
   return data
 
 def rollout(classifier, state):
-  for _ in range(10):
+  while not state.terminated:
     predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
-    predictions = classifier.predict(input_fn=predict_input_fn)
-    prediction = next(predictions)
-    #for _, prediction in enumerate(predictions):
-    index = np.argmax(prediction["probabilities"])
+    prediction = next(classifier.predict(input_fn=predict_input_fn))
+    index = np.argmax(prediction["probabilities"]) # Always pick the best action
+    # index = np.random.choice(ACTIONS, p=prediction["probabilities"]) # Weighted sample from action probabilities
     str_move = convert_index_to_move(index, state.player)
     print(state)
     print("Play %s with probability %f" % (str_move, prediction["probabilities"][index]))
     state = bt.Breakthrough(state, decode_move(str_move))
+  print("Game complete.  Final state...\n")
+  print(state)
         
 def predict():
   # Create the Estimator
