@@ -24,12 +24,14 @@ class Breakthrough:
       self.zhash = ZERO_HASH
       self.player = 0
       self.terminated = 0
+      self.reward = 0
       self.__reset()
     else:
       self.grid = np.copy(parent_state.grid)
       self.zhash = parent_state.zhash
       self.player = parent_state.player
       self.terminated = parent_state.terminated
+      self.reward = parent_state.reward
       self.__apply(move_to_apply)
     self.grid.setflags(write = False)
 
@@ -53,10 +55,13 @@ class Breakthrough:
 
   def __apply(self, move):
     (src_row, src_col, dst_row, dst_col) = move
+    # !! Do something about illegal moves
     self.__set_cell(src_row, src_col, 2);                # Vacate source cell
     self.__set_cell(dst_row, dst_col, self.player);      # Occupy target cell
     self.terminated = ((dst_row == 0) or (dst_row == 7)) # Check if the game is over
+    self.reward = 1 if (self.player == 0) else -1        # A player 0 win scores +1, otherwise -1 
     self.player = 1 - self.player                        # Other player's turn
+    # !! ARR Also need to handle the case where a player's last piece is taken 
 
   def __str__(self):
     pretty = ''

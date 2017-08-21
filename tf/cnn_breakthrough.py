@@ -20,6 +20,7 @@ import re
 import sys
 import tempfile
 import tensorflow as tf
+import time
 
 ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
 DATA_TYPE = np.float32
@@ -241,19 +242,19 @@ def load_lg_dataset():
       
   return data
 
-def rollout(classifier, state):
+def greedy_rollout(classifier, state):
   while not state.terminated:
     predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
     prediction = next(classifier.predict(input_fn=predict_input_fn))
     index = np.argmax(prediction["probabilities"]) # Always pick the best action
-    # index = np.random.choice(ACTIONS, p=prediction["probabilities"]) # Weighted sample from action probabilities
     str_move = convert_index_to_move(index, state.player)
     print(state)
     print("Play %s with probability %f" % (str_move, prediction["probabilities"][index]))
     state = bt.Breakthrough(state, decode_move(str_move))
   print("Game complete.  Final state...\n")
   print(state)
-        
+  return state.reward
+  
 def predict():
   # Create the Estimator
   print('Building model')
@@ -276,8 +277,35 @@ def predict():
     for index in sorted_indices:
       print("Play %s with probability %f" % (convert_index_to_move(index, state.player), prediction["probabilities"][index]))
     _ = input('Press enter to play on')
-    rollout(classifier, state)
-  
+    greedy_rollout(classifier, state)
+
+def rollout(classifier, state):
+  total_time = -int(round(time.time() * 1000))
+  nn_time = 0
+  while not state.terminated:
+    predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
+    nn_time  -= int(round(time.time() * 1000))
+    prediction = next(classifier.predict(input_fn=predict_input_fn))
+    nn_time  += int(round(time.time() * 1000))
+    index = np.random.choice(ACTIONS, p=prediction["probabilities"]) # Weighted sample from action probabilities
+    str_move = convert_index_to_move(index, state.player)
+    state = bt.Breakthrough(state, decode_move(str_move))
+  total_time  += int(round(time.time() * 1000))
+  print('Total time %dms of which %dms in NN' % (total_time, nn_time))
+  return state.reward
+        
+def evaluate():
+  # Evaluate the model
+  classifier = tf.estimator.Estimator(
+      model_fn=cnn_model_fn, model_dir=os.path.join(tempfile.gettempdir(), 'bt', 'current'))
+
+  # Run sample games and collect the total reward
+  NUM_MATCHES = 20  
+  total_reward = 0
+  for _ in range(NUM_MATCHES):
+    total_reward += rollout(classifier, bt.Breakthrough())
+  print('Average reward = %f' % (total_reward / NUM_MATCHES))    
+    
 def train():
   # Load the data
   all_data = load_lg_dataset()
@@ -358,13 +386,16 @@ def train():
 def main(argv):
   handled = False;
   while not handled:
-    cmd = input("Train (t) or predict (p)? ").lower()
+    cmd = input("Train (t), predict (p) or evaluate (e)? ").lower()
     if cmd == 'train' or cmd == 't':
       handled = True
       train()
     elif cmd == 'predict' or cmd == 'p':
       handled = True
       predict()
+    elif cmd == 'evaluate' or cmd == 'eval' or cmd == 'e':
+      handled = True
+      evaluate()
   
 if __name__ == "__main__":
   tf.app.run()
