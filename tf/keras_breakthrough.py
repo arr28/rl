@@ -53,8 +53,8 @@ def train():
                       batch_size=100)
   
   log('Evaluating')
-  (loss, accuracy) = mode.evaluate(eval_states, eval_action_probs)
-  print('accuracy=%f (loss=%f)' % (accuracy, loss))
+  (loss, accuracy) = model.evaluate(eval_states, eval_action_probs, verbose=0)
+  log('accuracy=%f (loss=%f)' % (accuracy, loss))
       
   log('Done')
   
