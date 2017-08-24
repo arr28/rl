@@ -6,8 +6,11 @@ import breakthrough as bt
 import little_golem as lg
 import nn
 import numpy as np
+import os
 import sys
+import tempfile
 
+from keras.callbacks import TensorBoard, ModelCheckpoint
 from logger import log, log_progress
 
 def train():
@@ -47,15 +50,19 @@ def train():
   log('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   log('Training')
+  log_dir = os.path.join(tempfile.gettempdir(), 'bt', 'keras')  
   history = model.fit(train_states,
                       train_action_probs,
-                      epochs=1,
-                      batch_size=100)
+                      epochs=30,
+                      batch_size=16,
+                      callbacks=[TensorBoard(log_dir=log_dir, write_graph=True),
+                                 ModelCheckpoint(filepath=os.path.join(log_dir, 'model.epoch{epoch:02d}.hdf5'))],
+                      verbose=0)
   
   log('Evaluating')
   (loss, accuracy) = model.evaluate(eval_states, eval_action_probs, verbose=0)
-  log('accuracy=%f (loss=%f)' % (accuracy, loss))
-      
+  log('accuracy=%f (loss=%f)' % (accuracy, loss))      
+    
   log('Done')
   
 def main(argv):
