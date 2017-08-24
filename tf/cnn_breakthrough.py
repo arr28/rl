@@ -14,6 +14,8 @@ from __future__ import division
 from __future__ import print_function
 
 import breakthrough as bt
+import little_golem as lg
+import nn
 import numpy as np
 import os
 import re
@@ -21,9 +23,6 @@ import sys
 import tempfile
 import tensorflow as tf
 import time
-
-ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
-DATA_TYPE = np.float32
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -87,7 +86,7 @@ def cnn_model_fn(features, labels, mode):
   # Logits layer
   # Input Tensor Shape: [batch_size, 1024]
   # Output Tensor Shape: [batch_size, ACTIONS (=192)]
-  logits = tf.layers.dense(inputs=dropout, units=ACTIONS)
+  logits = tf.layers.dense(inputs=dropout, units=bt.ACTIONS)
 
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
@@ -117,20 +116,6 @@ def cnn_model_fn(features, labels, mode):
   return tf.estimator.EstimatorSpec(
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
-def decode_move(move):
-  (src, dst) = re.split('x|\-', move)
-  src_col = ord(src[0]) - ord('a')
-  src_row = ord(src[1]) - ord('1')
-  dst_col = ord(dst[0]) - ord('a')
-  dst_row = ord(dst[1]) - ord('1')
-  return (src_row, src_col, dst_row, dst_col)
-
-def convert_move_to_index(move):
-  (src_row, src_col, dst_row, dst_col) = move;
-  index = ((src_row * 8) + src_col) * 3
-  index += 1 + dst_col - src_col # (left, forward, right) => (0, 1, 2)
-  return index
-
 def convert_index_to_move(index, player):
   dir = (index % 3) - 1
   index = int(index / 3)
@@ -147,110 +132,15 @@ def convert_index_to_move(index, player):
   # print("%s%s %s" % (src_col, src_row, direction))
   return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
 
-def convert_state_to_nn_input(state, nn_input=np.empty((8, 8, 6), dtype=DATA_TYPE)):
-  # 6-channel 8x8 network
-  # 
-  # 1. Player's own pieces
-  # 2. Opponent's pieces
-  # 3. Empty squares
-  # 4. Player to play
-  # 5. Zeros
-  # 6. Ones
-
-  if state.player == 0:
-    np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
-    np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
-  else:
-    np.copyto(nn_input[:,:,0:1].reshape(8, 8), np.equal(state.grid, np.ones((8,8))))
-    np.copyto(nn_input[:,:,1:2].reshape(8, 8), np.equal(state.grid, np.zeros((8,8))))
-
-  np.copyto(nn_input[:,:,2:3].reshape(8, 8), np.equal(state.grid, np.full((8,8), 2)))
-  np.copyto(nn_input[:,:,3:4].reshape(8, 8), np.full((8,8), state.player))
-  np.copyto(nn_input[:,:,4:5].reshape(8, 8), np.zeros((8, 8), dtype=DATA_TYPE))
-  np.copyto(nn_input[:,:,5:6].reshape(8, 8), np.ones((8, 8), dtype=DATA_TYPE))
-  
-  return nn_input
-
-def load_lg_dataset():
-  # Starting ELO is 1500
-  good_players = {'wanderer_bot', 'Ray Garrison', 'ahhmet', 'edbonnet', 'halladba', 'turab 69', 'David Scott', # 2067
-                  'Mojmir Hanes', 'michelwav', 'luffy_bot', 'kingofthebesI', 'hammurabi', 'Stop_Sign', 'smilingface', # 1971
-                  'isketzo067', 'Diamante', 'antony', 'ypercube', 'Marius Halsor', 'bennok', 'Tim Shih', # 1878
-                  'Ragnar Wikman', 'Micco', 'kyle douglas', 'busybee', 'Zul Nadzri', 'Maciej Celuch', 'mungo', # 1820 
-                  'richyfourtytwo', 'Madris', 'MojoRising', 'Reiner Martin', 'Florian Jamain', 'z', 'wallachia', # 1770
-                  'Martyn Hamer', 'sZamBa_', 'MRFvR', 'm273cool', 'Chris', 'eaeaeapepe', 'gamesorry', 'Bernard Herwig', # 1747
-                  'Maurizio De Leo', 'rafi', 'Willem Gerritsen', 'Mirko Rahn', 'Elsabio', 'kfiecio', 'Nagy Fathy', # 1723
-                  'basplund', 'MathPickle', 'Jose M Grau Ribas', 'Matteo A.', 'Arty Sandler', 'dimitris', 'BigChicken', # 1682
-                  'Thomas', 'nietsabes', 'Dvd Avins', 'pim', 'Luca Bruzzi', 'Cassiel', 'emilioes', 'vstjrt', # 1653
-                  'Christian K', 'diego44', 'steve1964', 'lin1234', 'siroman', 'Tony', 'RoByN', 'slaapgraag', # 1641
-                  'Tobias Lang', 'Rex Moore', 'Jonas', 'Richard Malaschitz', 'I R I', 'Peter Koning', 'Ryan'} # 1616
-  data = {}
-
-  num_matches = 0
-  num_moves = 0
-  num_duplicate_hits = 0
-
-  white_matcher = re.compile('\[White "(.*)"\]')
-  black_matcher = re.compile('\[Black "(.*)"\]')
-  
-  # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
-  print('Loading data', end='', flush=True)
-  raw_lg_data = open('../data/training/breakthrough.txt', 'r', encoding='latin1')
-  for line in raw_lg_data:
-    
-    if 'Event' in line:
-      white_good = False
-      black_good = False
-      
-    match = white_matcher.match(line)
-    if match:
-      white_good = match.group(1) in good_players
-
-    match = black_matcher.match(line)
-    if match:
-      black_good = match.group(1) in good_players
-      
-    if line.startswith('1.') and '20.' in line and white_good and black_good:
-      num_matches += 1
-      match = bt.Breakthrough()
-      for part in line.split(' '):
-        if len(part) == 5:
-          num_moves += 1
-          if num_moves % 10000 == 0:
-              print(".", end='', flush=True)
-          move = decode_move(part)
-
-          # Add a training example
-          if match in data:
-            num_duplicate_hits += 1
-          else:
-            data[match] = np.zeros((ACTIONS), dtype=DATA_TYPE)
-          data[match][convert_move_to_index(move)] += 1
-
-          # Process the move to get the new state
-          match = bt.Breakthrough(match, move)
-
-  print('\n  Loaded %d moves from %d matches (avg. %d moves/match) with %d duplicate hits' % 
-    (num_moves, num_matches, num_moves / num_matches, num_duplicate_hits))
-  
-  # Normalise the action probabilities
-  print('  Normalising data')
-  for action_probs in iter(data.values()):
-    total = action_probs.sum()
-    for ii in range(ACTIONS):
-      action_probs[ii] /= total
-      
-  return data
-
 def greedy_rollout(classifier, state):
   while not state.terminated:
-    predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
+    predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": nn.convert_state(state)}, shuffle=False)
     prediction = next(classifier.predict(input_fn=predict_input_fn))
     index = np.argmax(prediction["probabilities"]) # Always pick the best action
     str_move = convert_index_to_move(index, state.player)
     print(state)
     print("Play %s with probability %f" % (str_move, prediction["probabilities"][index]))
-    state = bt.Breakthrough(state, decode_move(str_move))
+    state = bt.Breakthrough(state, lg.decode_move(str_move))
   print("Game complete.  Final state...\n")
   print(state)
   return state.reward
@@ -267,10 +157,10 @@ def predict():
   state = bt.Breakthrough()
   for part in history.split(' '):
     if len(part) == 5:
-      state = bt.Breakthrough(state, decode_move(part))
+      state = bt.Breakthrough(state, lg.decode_move(part))
   
   # Predict the next move
-  predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
+  predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": nn.convert_state(state)}, shuffle=False)
   predictions = classifier.predict(input_fn=predict_input_fn)
   for _, prediction in enumerate(predictions):
     sorted_indices = np.argsort(prediction["probabilities"])[::-1][0:5]
@@ -283,13 +173,13 @@ def rollout(classifier, state):
   total_time = -int(round(time.time() * 1000))
   nn_time = 0
   while not state.terminated:
-    predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": convert_state_to_nn_input(state)}, shuffle=False)
+    predict_input_fn = tf.estimator.inputs.numpy_input_fn(x={"x": nn.convert_state(state)}, shuffle=False)
     nn_time  -= int(round(time.time() * 1000))
     prediction = next(classifier.predict(input_fn=predict_input_fn))
     nn_time  += int(round(time.time() * 1000))
-    index = np.random.choice(ACTIONS, p=prediction["probabilities"]) # Weighted sample from action probabilities
+    index = np.random.choice(bt.ACTIONS, p=prediction["probabilities"]) # Weighted sample from action probabilities
     str_move = convert_index_to_move(index, state.player)
-    state = bt.Breakthrough(state, decode_move(str_move))
+    state = bt.Breakthrough(state, lg.decode_move(str_move))
   total_time  += int(round(time.time() * 1000))
   print('Total time %dms of which %dms in NN' % (total_time, nn_time))
   return state.reward
@@ -308,16 +198,16 @@ def evaluate():
     
 def train():
   # Load the data
-  all_data = load_lg_dataset()
+  all_data = lg.load_data()
   samples = len(all_data);
   print('  Sorting data')
   states = sorted(all_data.keys())
-  nn_states = np.empty((samples, 8, 8, 6), dtype=DATA_TYPE)
-  action_probs = np.empty((samples, ACTIONS), dtype=DATA_TYPE)
+  nn_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
+  action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
   ii = 0
   for state in states:
-    convert_state_to_nn_input(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
-    np.copyto(action_probs[ii:ii+1].reshape(ACTIONS), all_data[state])
+    nn.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
+    np.copyto(action_probs[ii:ii+1].reshape(bt.ACTIONS), all_data[state])
     ii += 1
     
   # Split into training and validation sets.

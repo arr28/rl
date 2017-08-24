@@ -3,6 +3,7 @@
 import hashlib
 import numpy as np
 
+ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
 Z_HASHES = np.zeros((8, 8, 3), dtype=np.int64)
 ZERO_HASH = 0
 
@@ -99,3 +100,11 @@ class Breakthrough:
     return int(self.zhash)
 
 __static_init()
+
+''' ========== Static functions ========== '''
+
+def convert_move_to_index(move):
+  (src_row, src_col, dst_row, dst_col) = move;
+  index = ((src_row * 8) + src_col) * 3
+  index += 1 + dst_col - src_col # (left, forward, right) => (0, 1, 2)
+  return index
