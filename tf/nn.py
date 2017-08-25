@@ -7,8 +7,8 @@ import numpy as np
 
 DATA_TYPE = np.float32
 
+from keras.layers import Conv2D, Dense, Dropout, Flatten
 from keras.models import Sequential
-from keras.layers import Conv2D, Dense, Dropout, Reshape
 from keras.optimizers import SGD, Adam
 
 def create_model():
@@ -16,8 +16,7 @@ def create_model():
   model.add(Conv2D(input_shape=(8, 8, 6), filters=64, kernel_size=[5,5], padding='same', activation='relu'))
   model.add(Conv2D(filters=128, kernel_size=[3,3], padding='same', activation='relu'))
   model.add(Conv2D(filters=128, kernel_size=[3,3], padding='same', activation='relu'))
-  model.add(Reshape([8 * 8 * 128]))
-  model.add(Dense(1024, activation='relu'))
+  model.add(Flatten())
   model.add(Dropout(0.4))
   model.add(Dense(bt.ACTIONS, activation='softmax'))  
   model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001), metrics=['accuracy'])
