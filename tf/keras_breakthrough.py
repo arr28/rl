@@ -59,7 +59,7 @@ def train():
                       train_action_probs,
                       validation_data=(eval_states, eval_action_probs),
                       epochs=epochs,
-                      batch_size=16,
+                      batch_size=1024,
                       callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
                                  ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5'))])
   
