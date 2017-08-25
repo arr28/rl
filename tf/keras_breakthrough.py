@@ -82,17 +82,15 @@ def convert_index_to_move(index, player):
   # print("%s%s %s" % (src_col, src_row, direction))
   return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
 
-def greedy_rollout(model, state):
+def greedy_rollout(model, state, show=False):
   while not state.terminated:
     predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
     for _, prediction in enumerate(predictions):
       index = np.argmax(prediction) # Always pick the best action
       str_move = convert_index_to_move(index, state.player)
-      print(state)
-      print("Play %s with probability %f" % (str_move, prediction[index]))
+      if show: print('Playing %s' % str_move)
       state = bt.Breakthrough(state, lg.decode_move(str_move))
-  print("Game complete.  Final state...\n")
-  print(state)
+      if show: print(state)
   return state.reward
 
 def predict():
@@ -106,16 +104,22 @@ def predict():
   for part in history.split(' '):
     if len(part) == 5:
       state = bt.Breakthrough(state, lg.decode_move(part))
-
+  print(state)
+  
+  desired_reward = 1 if state.player == 0 else -1
+  
   # Predict the next move
   predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
   for _, prediction in enumerate(predictions):
     sorted_indices = np.argsort(prediction)[::-1][0:5]
     for index in sorted_indices:
-      log("Play %s with probability %f" % (convert_index_to_move(index, state.player), prediction[index]))
+      trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
+      win = greedy_rollout(model, trial_state) == desired_reward
+      log("Play %s with probability %f (%s)" % 
+          (convert_index_to_move(index, state.player), prediction[index], '*' if win else '!'))
       
     _ = input('Press enter to play on')
-    greedy_rollout(model, state)
+    greedy_rollout(model, state, show=True)
 
 def rollout(model, state):
   # Do a random on-policy rollout

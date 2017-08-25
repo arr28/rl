@@ -108,3 +108,12 @@ def convert_move_to_index(move):
   index = ((src_row * 8) + src_col) * 3
   index += 1 + dst_col - src_col # (left, forward, right) => (0, 1, 2)
   return index
+
+def convert_index_to_move(index, player):
+  dir = (index % 3) - 1
+  index = int(index / 3)
+  src_col = index % 8
+  src_row = int(index / 8)
+  dst_col = src_col + dir
+  dst_row = src_row + 1 if player == 0 else -1
+  return (src_row, src_col, dst_row, dst_col)
