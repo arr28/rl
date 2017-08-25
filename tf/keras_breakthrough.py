@@ -57,19 +57,12 @@ def train():
   epochs = 18
   history = model.fit(train_states,
                       train_action_probs,
+                      validation_data=(eval_states, eval_action_probs),
                       epochs=epochs,
                       batch_size=16,
                       callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
-                                 ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5'))],
-                      verbose=0)
+                                 ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5'))])
   
-  log('Evaluating') # !! ARR Just 1 evaluation at the end.  Want to do this throughout training.
-  for epoch in range(epochs):
-    checkpoint = os.path.join(LOG_DIR, 'model.epoch%02d.hdf5' % epoch)
-    model = load_model(checkpoint)
-    (loss, accuracy) = model.evaluate(eval_states, eval_action_probs, batch_size=1024, verbose=0) 
-    log('Epoch %d: accuracy=%f (loss=%f)' % (epoch, accuracy, loss))      
-    
   log('Done')
   
 def convert_index_to_move(index, player):
