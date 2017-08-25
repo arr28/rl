@@ -96,7 +96,6 @@ def greedy_rollout(model, state):
   return state.reward
 
 def predict():
-  
   # Load the trained model  
   checkpoint = os.path.join(LOG_DIR, 'model.epoch17.hdf5') # !! ARR Don't hard-code
   model = load_model(checkpoint)
@@ -117,7 +116,35 @@ def predict():
       
     _ = input('Press enter to play on')
     greedy_rollout(model, state)
-        
+
+def rollout(model, state):
+  # Do a random on-policy rollout
+  while not state.terminated:
+    predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
+    for _, prediction in enumerate(predictions):
+      index = np.random.choice(bt.ACTIONS, p=prediction) # Weighted sample from action probabilities
+      str_move = convert_index_to_move(index, state.player)
+      state = bt.Breakthrough(state, lg.decode_move(str_move))
+  return state.reward
+
+def evaluate():
+  # Load the trained model
+  checkpoint = os.path.join(LOG_DIR, 'model.epoch99.hdf5') # !! ARR Don't hard-code
+  model = load_model(checkpoint)
+
+  # Run sample games and collect the total reward
+  NUM_MATCHES = 100
+  total_reward = 0
+  for _ in range(NUM_MATCHES):
+    total_reward += rollout(model, bt.Breakthrough())
+    log_progress()
+  print('')
+  log('Average reward over %d matches = %f' % (NUM_MATCHES, total_reward / NUM_MATCHES))
+
+def reinforce():
+  # !! ARR For now, just do an evaluation
+  evaluate()
+
 def main(argv):
 
   handled = False
