@@ -11,7 +11,11 @@ import sys
 import tempfile
 
 from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.models import load_model
 from logger import log, log_progress
+from tensorflow.python.training.saver import checkpoint_exists
+
+LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 
 def train():
   log('Creating model')
@@ -50,35 +54,88 @@ def train():
   log('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   log('Training')
-  log_dir = os.path.join(tempfile.gettempdir(), 'bt', 'keras')  
+  epochs = 18
   history = model.fit(train_states,
                       train_action_probs,
-                      epochs=30,
+                      epochs=epochs,
                       batch_size=16,
-                      callbacks=[TensorBoard(log_dir=log_dir, write_graph=True),
-                                 ModelCheckpoint(filepath=os.path.join(log_dir, 'model.epoch{epoch:02d}.hdf5'))],
+                      callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
+                                 ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5'))],
                       verbose=0)
   
-  log('Evaluating')
-  (loss, accuracy) = model.evaluate(eval_states, eval_action_probs, verbose=0)
-  log('accuracy=%f (loss=%f)' % (accuracy, loss))      
+  log('Evaluating') # !! ARR Just 1 evaluation at the end.  Want to do this throughout training.
+  for epoch in range(epochs):
+    checkpoint = os.path.join(LOG_DIR, 'model.epoch%02d.hdf5' % epoch)
+    model = load_model(checkpoint)
+    (loss, accuracy) = model.evaluate(eval_states, eval_action_probs, batch_size=1024, verbose=0) 
+    log('Epoch %d: accuracy=%f (loss=%f)' % (epoch, accuracy, loss))      
     
   log('Done')
   
-def main(argv):
-  handled = False;
-  train()
-  return
+def convert_index_to_move(index, player):
+  dir = (index % 3) - 1
+  index = int(index / 3)
+  src_col_ix = index % 8
+  src_row_ix = int(index / 8)
+  dst_col_ix = src_col_ix + dir
+  dst_row_ix = src_row_ix + 1 if player == 0 else src_row_ix - 1
+   
+  src_col = chr(src_col_ix + ord('a'))
+  src_row = chr(src_row_ix + ord('1'))
+  dst_col = chr(dst_col_ix + ord('a'))
+  dst_row = chr(dst_row_ix + ord('1'))
+  
+  # print("%s%s %s" % (src_col, src_row, direction))
+  return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
 
+def greedy_rollout(model, state):
+  while not state.terminated:
+    predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
+    for _, prediction in enumerate(predictions):
+      index = np.argmax(prediction) # Always pick the best action
+      str_move = convert_index_to_move(index, state.player)
+      print(state)
+      print("Play %s with probability %f" % (str_move, prediction[index]))
+      state = bt.Breakthrough(state, lg.decode_move(str_move))
+  print("Game complete.  Final state...\n")
+  print(state)
+  return state.reward
+
+def predict():
+  
+  # Load the trained model  
+  checkpoint = os.path.join(LOG_DIR, 'model.epoch17.hdf5') # !! ARR Don't hard-code
+  model = load_model(checkpoint)
+  
+  # Advance the game to the desired state
+  history = input('Input game history: ')
+  state = bt.Breakthrough()
+  for part in history.split(' '):
+    if len(part) == 5:
+      state = bt.Breakthrough(state, lg.decode_move(part))
+
+  # Predict the next move
+  predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
+  for _, prediction in enumerate(predictions):
+    sorted_indices = np.argsort(prediction)[::-1][0:5]
+    for index in sorted_indices:
+      log("Play %s with probability %f" % (convert_index_to_move(index, state.player), prediction[index]))
+      
+    _ = input('Press enter to play on')
+    greedy_rollout(model, state)
+        
+def main(argv):
+
+  handled = False
   while not handled:
-    cmd = input("** Running with Keras **  Train (t), predict (p) or evaluate (e)? ").lower()
+    cmd = input("** Running with Keras **  Train (t), predict (p) or reinforce (r)? ").lower()
     if cmd == 'train' or cmd == 't':
       handled = True
       train()
     elif cmd == 'predict' or cmd == 'p':
       handled = True
       predict()
-    elif cmd == 'evaluate' or cmd == 'eval' or cmd == 'e':
+    elif cmd == 'reinforce' or cmd == 'r':
       handled = True
       evaluate()
   
