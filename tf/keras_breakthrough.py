@@ -10,7 +10,7 @@ import os
 import sys
 import tempfile
 
-from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.models import load_model
 from logger import log, log_progress
 from tensorflow.python.training.saver import checkpoint_exists
@@ -54,14 +54,15 @@ def train():
   log('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   log('Training')
-  epochs = 18
+  epochs = 40
   history = model.fit(train_states,
                       train_action_probs,
                       validation_data=(eval_states, eval_action_probs),
                       epochs=epochs,
                       batch_size=1024,
                       callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
-                                 ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5'))])
+                                 ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
+                                 ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])
   
   log('Done')
   
