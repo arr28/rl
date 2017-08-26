@@ -62,9 +62,7 @@ def train():
                       batch_size=1024,
                       callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
                                  ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
-                                 ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])
-  
-  log('Done')
+                                 ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])  
   
 def convert_index_to_move(index, player):
   move = bt.convert_index_to_move(index, player)
@@ -72,7 +70,7 @@ def convert_index_to_move(index, player):
 
 def predict():
   # Load the trained model  
-  checkpoint = os.path.join(LOG_DIR, 'model.epoch17.hdf5') # !! ARR Don't hard-code
+  checkpoint = os.path.join(LOG_DIR, 'model.epoch99.hdf5') # !! ARR Don't hard-code
   model = load_model(checkpoint)
   
   # Advance the game to the desired state
@@ -91,9 +89,13 @@ def predict():
     sorted_indices = np.argsort(prediction)[::-1][0:5]
     for index in sorted_indices:
       trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
-      win = rollout(model, trial_state, greedy=True) == desired_reward
-      log("Play %s with probability %f (%s)" % 
-          (convert_index_to_move(index, state.player), prediction[index], '*' if win else '!'))
+      greedy_win = rollout(model, trial_state, greedy=True) == desired_reward
+      avg_score = evaluate(trial_state, model)
+      log("Play %s with probability %f (%s) for avg. score %f" % 
+          (convert_index_to_move(index, state.player), 
+           prediction[index], 
+           '*' if greedy_win else '!',
+           avg_score))
       
     _ = input('Press enter to play on')
     rollout(model, state, greedy=True, show=True)
@@ -103,33 +105,64 @@ def rollout(model, state, greedy=False, show=False):
     predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
     for _, prediction in enumerate(predictions):
       # Pick the next action, either greedily or weighted by the policy
-      index = np.argmax(prediction) if greedy else np.random.choice(bt.ACTIONS, p=prediction)
+      index = -1
+      if greedy:
+        index = np.argmax(prediction)
+      else:
+        legal = False
+        while not legal:
+          index = np.random.choice(bt.ACTIONS, p=prediction)
+          legal = state.is_legal(bt.convert_index_to_move(index, state.player))
       str_move = convert_index_to_move(index, state.player)
       if show: print('Playing %s' % str_move)
       state = bt.Breakthrough(state, lg.decode_move(str_move))
       if show: print(state)
   return state.reward
 
-def evaluate():
-  # Load the trained model
-  checkpoint = os.path.join(LOG_DIR, 'model.epoch99.hdf5') # !! ARR Don't hard-code
-  model = load_model(checkpoint)
-
+def evaluate(state, model, num_rollouts=10):
   # Run sample games and collect the total reward
-  NUM_MATCHES = 100
   total_reward = 0
-  for _ in range(NUM_MATCHES):
-    total_reward += rollout(model, bt.Breakthrough())
+  for _ in range(num_rollouts):
+    total_reward += rollout(model, state, greedy=False)
+  return total_reward / num_rollouts
+
+''' Rollout a game from the start with 2 different policies (one per player). '''
+def rollout2(models):
+  state = bt.Breakthrough()
+  while not state.terminated:
+    predictions = models[state.player].predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
+    for _, prediction in enumerate(predictions):
+      # Pick the next action, either greedily or weighted by the policy
+      index = -1
+      legal = False
+      while not legal:
+        index = np.random.choice(bt.ACTIONS, p=prediction)
+        legal = state.is_legal(bt.convert_index_to_move(index, state.player))
+      state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
+  return state.reward
+
+def reinforce(num_matches = 100):
+  # !! ARR For now, just compare 2 models
+  
+  # Load the trained models
+  our_model = load_model(os.path.join(LOG_DIR, 'model.epoch99.hdf5'))
+  their_model = load_model(os.path.join(LOG_DIR, 'model.epoch17.hdf5'))
+  
+  # Player the models against each other
+  log('Comparing models', end='')
+  wins = 0
+  for match in range(num_matches):
+    if match % 2 == 0:
+      # We'll play first
+      if rollout2([our_model, their_model]) == 1: wins += 1
+    else:
+      # We'll play second - and want the first player to lose
+      if rollout2([their_model, our_model]) == -1: wins += 1
     log_progress()
   print('')
-  log('Average reward over %d matches = %f' % (NUM_MATCHES, total_reward / NUM_MATCHES))
-
-def reinforce():
-  # !! ARR For now, just do an evaluation
-  evaluate()
+  log('Won %d%% of the matches (%d of %d)' % (int(wins * 100 / num_matches), wins, num_matches))
 
 def main(argv):
-
   handled = False
   while not handled:
     cmd = input("** Running with Keras **  Train (t), predict (p) or reinforce (r)? ").lower()
@@ -141,7 +174,8 @@ def main(argv):
       predict()
     elif cmd == 'reinforce' or cmd == 'r':
       handled = True
-      evaluate()
+      reinforce()
+  log('Done')
   
 if __name__ == "__main__":
   main(sys.argv)
