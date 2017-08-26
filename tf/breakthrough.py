@@ -1,6 +1,7 @@
 """Breakthrough game state (mutable)"""
 
 import hashlib
+import little_golem as lg
 import numpy as np
 
 ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
@@ -55,8 +56,15 @@ class Breakthrough:
     self.player = 0
 
   def __apply(self, move):
+    if not self.is_legal(move):
+      # Count illegal moves as an immediate loss
+      print('Tried to play illegal move %s in the following state...' % (lg.encode_move(move)))
+      print(self)
+      self.terminated = True
+      self.reward = -1 if (self.player == 0) else 1
+      return
+      
     (src_row, src_col, dst_row, dst_col) = move
-    # !! Do something about illegal moves
     self.__set_cell(src_row, src_col, 2);                # Vacate source cell
     self.__set_cell(dst_row, dst_col, self.player);      # Occupy target cell
     self.terminated = ((dst_row == 0) or (dst_row == 7)) # Check if the game is over
@@ -64,6 +72,27 @@ class Breakthrough:
     self.player = 1 - self.player                        # Other player's turn
     # !! ARR Also need to handle the case where a player's last piece is taken 
 
+  def is_legal(self, move):
+    (src_row, src_col, dst_row, dst_col) = move
+
+    # Must move own piece
+    if (self.grid[src_row][src_col] != self.player): return False    
+    
+    # Must stay on the board
+    if (src_row < 0 or src_row > 7 or
+        src_col < 0 or src_col > 7 or
+        dst_row < 0 or dst_row > 7 or
+        dst_col < 0 or dst_col > 7): return False
+    
+    # If moving straight forwards, must move to empty square
+    if ((src_col == dst_col) and (self.grid[dst_row][dst_col] != 2)): return False
+
+    # Can't move on top of own piece
+    if (self.grid[dst_row][dst_col] == self.player): return False
+    
+    # It's all okay then
+    return True
+    
   def __str__(self):
     pretty = ''
     for row in reversed(range(8)):
