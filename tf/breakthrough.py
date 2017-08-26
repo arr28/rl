@@ -115,5 +115,5 @@ def convert_index_to_move(index, player):
   src_col = index % 8
   src_row = int(index / 8)
   dst_col = src_col + dir
-  dst_row = src_row + 1 if player == 0 else -1
+  dst_row = src_row + (1 if player == 0 else -1)
   return (src_row, src_col, dst_row, dst_col)

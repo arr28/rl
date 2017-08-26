@@ -67,31 +67,8 @@ def train():
   log('Done')
   
 def convert_index_to_move(index, player):
-  dir = (index % 3) - 1
-  index = int(index / 3)
-  src_col_ix = index % 8
-  src_row_ix = int(index / 8)
-  dst_col_ix = src_col_ix + dir
-  dst_row_ix = src_row_ix + 1 if player == 0 else src_row_ix - 1
-   
-  src_col = chr(src_col_ix + ord('a'))
-  src_row = chr(src_row_ix + ord('1'))
-  dst_col = chr(dst_col_ix + ord('a'))
-  dst_row = chr(dst_row_ix + ord('1'))
-  
-  # print("%s%s %s" % (src_col, src_row, direction))
-  return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
-
-def greedy_rollout(model, state, show=False):
-  while not state.terminated:
-    predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
-    for _, prediction in enumerate(predictions):
-      index = np.argmax(prediction) # Always pick the best action
-      str_move = convert_index_to_move(index, state.player)
-      if show: print('Playing %s' % str_move)
-      state = bt.Breakthrough(state, lg.decode_move(str_move))
-      if show: print(state)
-  return state.reward
+  move = bt.convert_index_to_move(index, player)
+  return lg.encode_move(move)
 
 def predict():
   # Load the trained model  
@@ -114,21 +91,23 @@ def predict():
     sorted_indices = np.argsort(prediction)[::-1][0:5]
     for index in sorted_indices:
       trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
-      win = greedy_rollout(model, trial_state) == desired_reward
+      win = rollout(model, trial_state, greedy=True) == desired_reward
       log("Play %s with probability %f (%s)" % 
           (convert_index_to_move(index, state.player), prediction[index], '*' if win else '!'))
       
     _ = input('Press enter to play on')
-    greedy_rollout(model, state, show=True)
+    rollout(model, state, greedy=True, show=True)
 
-def rollout(model, state):
-  # Do a random on-policy rollout
+def rollout(model, state, greedy=False, show=False):
   while not state.terminated:
     predictions = model.predict(nn.convert_state(state).reshape((1, 8, 8, 6)))
     for _, prediction in enumerate(predictions):
-      index = np.random.choice(bt.ACTIONS, p=prediction) # Weighted sample from action probabilities
+      # Pick the next action, either greedily or weighted by the policy
+      index = np.argmax(prediction) if greedy else np.random.choice(bt.ACTIONS, p=prediction)
       str_move = convert_index_to_move(index, state.player)
+      if show: print('Playing %s' % str_move)
       state = bt.Breakthrough(state, lg.decode_move(str_move))
+      if show: print(state)
   return state.reward
 
 def evaluate():

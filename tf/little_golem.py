@@ -89,3 +89,12 @@ def decode_move(move):
   dst_col = ord(dst[0]) - ord('a')
   dst_row = ord(dst[1]) - ord('1')
   return (src_row, src_col, dst_row, dst_col)
+
+def encode_move(move):
+  (src_row_ix, src_col_ix, dst_row_ix, dst_col_ix) = move;
+  src_col = chr(src_col_ix + ord('a'))
+  src_row = chr(src_row_ix + ord('1'))
+  dst_col = chr(dst_col_ix + ord('a'))
+  dst_row = chr(dst_row_ix + ord('1'))
+  return format("%s%s-%s%s" % (src_col, src_row, dst_col, dst_row))
+
