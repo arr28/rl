@@ -1,3 +1,9 @@
+# !! ARR Ideas for improvement
+#
+# - Add reflections to the dataset (being careful about interactions with deduplication)
+# - Measure prediction speed (how would it do in a Monte Carlo rollout?)
+# - Parallel rollouts
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
