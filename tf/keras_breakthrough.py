@@ -14,14 +14,9 @@ import nn
 import numpy as np
 import os
 import sys
-import tempfile
 
-from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from logger import log, log_progress
 from policy import CNPolicy
-from tensorflow.python.training.saver import checkpoint_exists
-
-LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 
 def train():
   log('Creating policy')
@@ -35,11 +30,9 @@ def train():
   states = sorted(all_data.keys())
   nn_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
   action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
-  ii = 0
-  for state in states:
+  for ii, state in enumerate(states):
     policy.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
-    policy.copyto(action_probs[ii:ii+1].reshape(bt.ACTIONS), all_data[state])
-    ii += 1
+    np.copyto(action_probs[ii:ii+1].reshape(bt.ACTIONS), all_data[state])
     
   # Split into training and validation sets.
   # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming
@@ -60,16 +53,7 @@ def train():
   log('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   log('Training')
-  epochs = 40
-  # !! ARR "model" doesn't exist any more
-  history = model.fit(train_states,
-                      train_action_probs,
-                      validation_data=(eval_states, eval_action_probs),
-                      epochs=epochs,
-                      batch_size=1024,
-                      callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
-                                 ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
-                                 ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])  
+  policy.train(train_states, train_action_probs, eval_states, eval_action_probs)  
   
 def convert_index_to_move(index, player):
   move = bt.convert_index_to_move(index, player)
@@ -77,8 +61,7 @@ def convert_index_to_move(index, player):
 
 def predict():
   # Load the trained policy
-  checkpoint = os.path.join(LOG_DIR, 'model.epoch99.hdf5') # !! ARR Don't hard-code
-  policy = CNPolicy(checkpoint=checkpoint)
+  policy = CNPolicy(checkpoint='model.epoch99.hdf5')
   
   # Advance the game to the desired state
   history = input('Input game history: ')
@@ -173,8 +156,8 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   
 def reinforce(num_matches = 100):
   # Load the trained policies
-  our_policy = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch99.hdf5'))
-  their_policy = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch99.hdf5'))
+  our_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
+  their_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
   
   # !! ARR For now, just compare 2 policies
   log('Comparing policies')

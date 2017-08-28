@@ -5,16 +5,21 @@ from __future__ import print_function
 import breakthrough as bt
 import nn
 import numpy as np
+import os
+import tempfile
 
+from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.layers import Conv2D, Dense, Dropout, Flatten
 from keras.models import Sequential, load_model
 from keras.optimizers import SGD, Adam
+
+LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 
 class CNPolicy:
   
   def __init__(self, num_conv_layers=3, checkpoint=None):
     if checkpoint:
-      self._model = load_model(checkpoint)
+      self._model = load_model(os.path.join(LOG_DIR, checkpoint))
     else:
       self._model = Sequential()
       self._model.add(Conv2D(input_shape=(8, 8, 6), filters=64, kernel_size=[5,5], padding='same', activation='relu'))
@@ -25,6 +30,16 @@ class CNPolicy:
       self._model.add(Dense(bt.ACTIONS, activation='softmax'))  
       self._model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001), metrics=['accuracy'])
 
+  def train(self, train_states, train_action_probs, eval_states, eval_action_probs, epochs=40):
+    history = self._model.fit(train_states,
+                              train_action_probs,
+                              validation_data=(eval_states, eval_action_probs),
+                              epochs=epochs,
+                              batch_size=1024,
+                              callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
+                                         ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
+                                         ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])
+    
   def convert_state(self, state, nn_input=np.empty((8, 8, 6), dtype=nn.DATA_TYPE)):
     # 6-channel 8x8 network
     # 
