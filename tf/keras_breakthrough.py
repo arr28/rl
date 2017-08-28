@@ -96,46 +96,49 @@ def predict():
   for index in sorted_indices:
     trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
     greedy_win = rollout(policy, trial_state, greedy=True) == desired_reward
-    avg_score = evaluate(trial_state, policy)
-    log("Play %s with probability %f (%s) for avg. score %f" % 
+    win_rate = evaluate(trial_state, policy)
+    log("Play %s with probability %f (%s) for win rate %d%%" % 
         (convert_index_to_move(index, state.player), 
          prediction[index], 
          '*' if greedy_win else '!',
-         avg_score))
+         int(win_rate * 100)))
     
   _ = input('Press enter to play on')
   rollout(policy, state, greedy=True, show=True)
 
 def rollout(policy, state, greedy=False, show=False):
   while not state.terminated:
-    prediction = policy.get_action_probs(state)
     # Pick the next action, either greedily or weighted by the policy
     index = -1
     if greedy:
+      prediction = policy.get_action_probs(state)
       index = np.argmax(prediction)
     else:
-      legal = False
-      while not legal:
-        index = np.random.choice(bt.ACTIONS, p=prediction)
-        legal = state.is_legal(bt.convert_index_to_move(index, state.player))
+      index = policy.get_action_index(state)
     str_move = convert_index_to_move(index, state.player)
     if show: print('Playing %s' % str_move)
     state = bt.Breakthrough(state, lg.decode_move(str_move))
     if show: print(state)
   return state.reward
 
-def evaluate(state, policy, num_rollouts=10):
-  # Run sample games and collect the total reward
-  total_reward = 0
-  for _ in range(num_rollouts):
-    total_reward += rollout(policy, state, greedy=False)
-  return total_reward / num_rollouts
+def evaluate(initial_state, policy, num_rollouts=100):
+  states = [bt.Breakthrough(initial_state) for _ in range(num_rollouts)]
+  
+  move_made = True
+  while move_made:
+    move_made = False
+    for (state, action) in zip(states, policy.get_action_indicies(states)):
+      if not state.terminated:
+        state.apply(bt.convert_index_to_move(action, state.player))
+        move_made = True
+  
+  wins = 0
+  for state in states:
+    if state.is_win_for(initial_state.player): wins += 1    
+  return wins / num_rollouts
 
 def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
-  log('Parallel policy compare', end='')
-  
   states = [bt.Breakthrough() for _ in range(num_matches)]
-  wins = 0
 
   # We start all the even numbered games, they start all the odd ones.  Advance all the odd numbered games by a turn
   # so that it's our turn in every game.
@@ -150,19 +153,15 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   
   move_made = True
   while move_made:
-    move_made = False
-    log_progress()
-    
     # Compute the next move for each game in parallel
+    move_made = False    
     for (state, action) in zip(states, current_policy.get_action_indicies(states)):
       if not state.terminated:
         state.apply(bt.convert_index_to_move(action, state.player))
         move_made = True
-        if state.terminated: matches_complete += 1
       
     # Now the it's the other player's turn, so swap policies.
     current_policy, other_policy = other_policy, current_policy
-  print()
 
   wins = 0
   for state in states[0::2]:
@@ -178,7 +177,8 @@ def reinforce(num_matches = 100):
   their_policy = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch99.hdf5'))
   
   # !! ARR For now, just compare 2 policies
-  log('Using parallel compare, won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
+  log('Comparing policies')
+  log('Our policy won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
 
 def main(argv):
   quit = False

@@ -37,7 +37,8 @@ class Breakthrough:
       self.pieces = copy.deepcopy(parent_state.pieces)
       self.terminated = parent_state.terminated
       self.reward = parent_state.reward
-      self.apply(move_to_apply)
+    
+    if move_to_apply: self.apply(move_to_apply)
 
   def __set_cell(self, row, col, val):
     self.zhash ^= Z_HASHES[row][col][self.grid[row][col]]
@@ -98,7 +99,10 @@ class Breakthrough:
     
     # It's all okay then
     return True
-    
+  
+  def is_win_for(self, player):
+    return (player == 0 and self.reward == 1) or (player == 1 and self.reward == -1)
+  
   def __str__(self):
     pretty = ''
     for row in reversed(range(8)):
