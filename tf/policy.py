@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import breakthrough as bt
+import keras.backend as K
 import nn
 import numpy as np
 import os
@@ -39,7 +40,7 @@ class CNPolicy:
                               callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
                                          ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
                                          ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])
-    
+        
   def convert_state(self, state, nn_input=np.empty((8, 8, 6), dtype=nn.DATA_TYPE)):
     # 6-channel 8x8 network
     # 
@@ -94,3 +95,18 @@ class CNPolicy:
         actions.append(self._get_weighted_legal(state, action_probs))
     return actions
   
+  def reinforce(self, state, action, reward):
+    self._model.compile(loss=reinforcement_loss, optimizer=SGD(lr = 0.01 * reward)) # !! ARR (1) Too hot.  (2) Need to put back before doing train() again.
+    action_one_hot = np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE)
+    action_one_hot[action] = 1
+    self._model.train_on_batch(self.convert_state(state).reshape((1, 8, 8, 6)), action_one_hot.reshape((1, bt.ACTIONS)))
+    
+''' ========== Static methods ========== '''
+def reinforcement_loss(y_true, y_pred):
+    '''Loss function for the REINFORCE algorithm.
+    
+    y_true is a one-hot vector of the action taken.
+    y_pred is the network's outputs.
+    '''
+    # Only adjust the network weights for the played action.  (Multiplying by the one-hot vector achieves this.)
+    return -y_true * K.log(K.clip(y_pred, K.epsilon(), 1.0 - K.epsilon()))

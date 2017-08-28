@@ -159,6 +159,15 @@ def reinforce(num_matches = 100):
   our_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
   their_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
   
+  # !! ARR Single sample RL update
+  state = bt.Breakthrough()
+  action_probs = our_policy.get_action_probs(state)
+  action = np.argmax(action_probs)
+  our_policy.reinforce(state, action, 1)
+  new_action_probs = our_policy.get_action_probs(state)
+  
+  log('p(%d) was %f, now %f' % (action, action_probs[action], new_action_probs[action]))
+    
   # !! ARR For now, just compare 2 policies
   log('Comparing policies')
   log('Our policy won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
