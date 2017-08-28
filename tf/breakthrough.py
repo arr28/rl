@@ -37,8 +37,7 @@ class Breakthrough:
       self.pieces = copy.deepcopy(parent_state.pieces)
       self.terminated = parent_state.terminated
       self.reward = parent_state.reward
-      self.__apply(move_to_apply)
-    self.grid.setflags(write = False)
+      self.apply(move_to_apply)
 
   def __set_cell(self, row, col, val):
     self.zhash ^= Z_HASHES[row][col][self.grid[row][col]]
@@ -58,7 +57,7 @@ class Breakthrough:
           self.__set_cell(row, col, 2)
     self.player = 0
 
-  def __apply(self, move):
+  def apply(self, move):
     if not self.is_legal(move):
       # Count illegal moves as an immediate loss
       print('Tried to play illegal move %s in the following state...' % (lg.encode_move(move)))

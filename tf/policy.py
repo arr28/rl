@@ -49,7 +49,33 @@ class CNPolicy:
     
     return nn_input
 
-  def get_action_probs_for_state(self, state):
+  def get_action_probs(self, state):
     predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))
     for _, prediction in enumerate(predictions):
       return prediction
+    
+  def _get_weighted_legal(self, state, action_probs):
+    index = -1
+    legal = False
+    while not legal:
+      index = np.random.choice(bt.ACTIONS, p=action_probs)
+      legal = state.is_legal(bt.convert_index_to_move(index, state.player))
+    return index
+    
+  def get_action_index(self, state):
+    action_probs = self.get_action_probs(state)
+    return self._get_weighted_legal(state, action_probs)
+  
+  def get_action_indicies(self, states):
+    batch_input = np.empty((len(states), 8, 8, 6), dtype=nn.DATA_TYPE)
+    for ii, state in enumerate(states):
+      self.convert_state(state, batch_input[ii:ii+1].reshape((8, 8, 6)))
+    predictions = self._model.predict(batch_input)
+    actions = []
+    for state, action_probs in zip(states, predictions):
+      if state.terminated:
+        actions.append(-1)
+      else:      
+        actions.append(self._get_weighted_legal(state, action_probs))
+    return actions
+  

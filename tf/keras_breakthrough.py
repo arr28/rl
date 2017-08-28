@@ -24,7 +24,7 @@ from tensorflow.python.training.saver import checkpoint_exists
 LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 
 def train():
-  log('Creating model')
+  log('Creating policy')
   policy = CNPolicy()
 
   # Load the data  
@@ -76,7 +76,7 @@ def convert_index_to_move(index, player):
   return lg.encode_move(move)
 
 def predict():
-  # Load the trained model  
+  # Load the trained policy
   checkpoint = os.path.join(LOG_DIR, 'model.epoch99.hdf5') # !! ARR Don't hard-code
   policy = CNPolicy(checkpoint=checkpoint)
   
@@ -91,7 +91,7 @@ def predict():
   desired_reward = 1 if state.player == 0 else -1
   
   # Predict the next move
-  prediction = policy.get_action_probs_for_state(state)
+  prediction = policy.get_action_probs(state)
   sorted_indices = np.argsort(prediction)[::-1][0:5]
   for index in sorted_indices:
     trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
@@ -108,7 +108,7 @@ def predict():
 
 def rollout(policy, state, greedy=False, show=False):
   while not state.terminated:
-    prediction = policy.get_action_probs_for_state(state)
+    prediction = policy.get_action_probs(state)
     # Pick the next action, either greedily or weighted by the policy
     index = -1
     if greedy:
@@ -131,90 +131,68 @@ def evaluate(state, policy, num_rollouts=10):
     total_reward += rollout(policy, state, greedy=False)
   return total_reward / num_rollouts
 
-''' Rollout a game from the start with 2 different policies (one per player). '''
-def rollout2(policies):
-  state = bt.Breakthrough()
-  while not state.terminated:
-    # Pick the next action, according to the weighted by the policy (skipping illegal actions)
-    prediction = policies[state.player].get_action_probs_for_state(state)
-    index = -1
-    legal = False
-    while not legal:
-      index = np.random.choice(bt.ACTIONS, p=prediction)
-      legal = state.is_legal(bt.convert_index_to_move(index, state.player))
-    state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
-  return state.reward
-
-def compare_models_in_parallel(our_model, their_model, num_matches = 100):
-  states = [bt.Breakthrough() for _ in range(num_games)]
+def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
+  log('Parallel policy compare', end='')
+  
+  states = [bt.Breakthrough() for _ in range(num_matches)]
   wins = 0
 
   # We start all the even numbered games, they start all the odd ones.  Advance all the odd numbered games by a turn
   # so that it's our turn in every game.
-  odd_states = states[1::2]
-  moves = opponent.get_moves(states[1::2])
-  for st, mv in zip(odd_states, moves):
-      st.do_move(mv)
+  for state in states[1::2]:
+    index = their_policy.get_action_index(state)
+    state.apply(bt.convert_index_to_move(index, state.player))
 
-  current_model = our_model
-  other_model = their_model
-  idxs_to_unfinished_states = {i: states[i] for i in range(num_games)}
-  while len(idxs_to_unfinished_states) > 0:
-      # Get next moves by current player for all unfinished states.
-      moves = current.get_moves(idxs_to_unfinished_states.values())
-      just_finished = []
-      # Do each move to each state in order.
-      for (idx, state), mv in zip(idxs_to_unfinished_states.iteritems(), moves):
-          state.do_move(mv)
-          if state.is_end_of_game:
-              learner_won[idx] = state.get_winner() == learner_color[idx]
-              just_finished.append(idx)
+  # Rollout all the games to completion.
+  current_policy = our_policy
+  other_policy = their_policy
+  matches_complete = 0
+  
+  move_made = True
+  while move_made:
+    move_made = False
+    log_progress()
+    
+    # Compute the next move for each game in parallel
+    for (state, action) in zip(states, current_policy.get_action_indicies(states)):
+      if not state.terminated:
+        state.apply(bt.convert_index_to_move(action, state.player))
+        move_made = True
+        if state.terminated: matches_complete += 1
+      
+    # Now the it's the other player's turn, so swap policies.
+    current_policy, other_policy = other_policy, current_policy
+  print()
 
-      # Remove games that have finished from dict.
-      for idx in just_finished:
-          del idxs_to_unfinished_states[idx]
-
-      # Now the it's the other player's turn, so swap models.
-      current_model, other_model = other_model, current_model
-
-  # Return the win ratio.
-  wins = sum(state.get_winner() == pc for (state, pc) in zip(states, learner_color))
-  return float(wins) / num_games
+  wins = 0
+  for state in states[0::2]:
+    if state.reward == 1: wins += 1
+  for state in states[1::2]:
+    if state.reward == -1: wins += 1
+  
+  return wins / num_matches
   
 def reinforce(num_matches = 100):
-  # !! ARR For now, just compare 2 models
+  # Load the trained policies
+  our_policy = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch99.hdf5'))
+  their_policy = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch99.hdf5'))
   
-  # Load the trained models
-  our_model = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch17.hdf5'))
-  their_model = CNPolicy(checkpoint=os.path.join(LOG_DIR, 'model.epoch17.hdf5'))
-  
-  # Player the models against each other
-  log('Comparing models', end='')
-  wins = 0
-  for match in range(num_matches):
-    if match % 2 == 0:
-      # We'll play first
-      if rollout2([our_model, their_model]) == 1: wins += 1
-    else:
-      # We'll play second - and want the first player to lose
-      if rollout2([their_model, our_model]) == -1: wins += 1
-    log_progress()
-  print('')
-  log('Won %d%% of the matches (%d of %d)' % (int(wins * 100 / num_matches), wins, num_matches))
+  # !! ARR For now, just compare 2 policies
+  log('Using parallel compare, won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
 
 def main(argv):
-  handled = False
-  while not handled:
-    cmd = input("** Running with Keras **  Train (t), predict (p) or reinforce (r)? ").lower()
+  quit = False
+  while not quit:
+    log('', end='')
+    cmd = input("** Running with Keras **  Train (t), predict (p), reinforce (r) or quit (q)? ").lower()
     if cmd == 'train' or cmd == 't':
-      handled = True
       train()
     elif cmd == 'predict' or cmd == 'p':
-      handled = True
       predict()
     elif cmd == 'reinforce' or cmd == 'r':
-      handled = True
       reinforce()
+    elif cmd == 'quit' or cmd == 'q':
+      quit= True
   log('Done')
   
 if __name__ == "__main__":
