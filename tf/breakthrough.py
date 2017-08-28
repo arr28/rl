@@ -1,5 +1,6 @@
 """Breakthrough game state (mutable)"""
 
+import copy
 import hashlib
 import little_golem as lg
 import numpy as np
@@ -25,6 +26,7 @@ class Breakthrough:
       self.grid = np.zeros((8, 8), dtype=np.int8)
       self.zhash = ZERO_HASH
       self.player = 0
+      self.pieces = [16, 16]
       self.terminated = 0
       self.reward = 0
       self.__reset()
@@ -32,6 +34,7 @@ class Breakthrough:
       self.grid = np.copy(parent_state.grid)
       self.zhash = parent_state.zhash
       self.player = parent_state.player
+      self.pieces = copy.deepcopy(parent_state.pieces)
       self.terminated = parent_state.terminated
       self.reward = parent_state.reward
       self.__apply(move_to_apply)
@@ -65,12 +68,16 @@ class Breakthrough:
       return
       
     (src_row, src_col, dst_row, dst_col) = move
-    self.__set_cell(src_row, src_col, 2);                # Vacate source cell
+    self.__set_cell(src_row, src_col, 2)                 # Vacate source cell
+    if self.grid[dst_row][dst_col] != 2:                 # Record capture
+      self.pieces[self.grid[dst_row][dst_col]] -= 1
     self.__set_cell(dst_row, dst_col, self.player);      # Occupy target cell
-    self.terminated = ((dst_row == 0) or (dst_row == 7)) # Check if the game is over
-    self.reward = 1 if (self.player == 0) else -1        # A player 0 win scores +1, otherwise -1 
     self.player = 1 - self.player                        # Other player's turn
-    # !! ARR Also need to handle the case where a player's last piece is taken 
+    self.terminated = ((dst_row == 0) or                 # Check if the game is over 
+                       (dst_row == 7) or
+                       (self.pieces[self.player] == 0)) 
+    self.reward = -1 if (self.player == 0) else 1        # If the game is over, the player to play has lost
+                                                         # A player 0 win scores +1, otherwise -1 
 
   def is_legal(self, move):
     (src_row, src_col, dst_row, dst_col) = move
