@@ -132,7 +132,6 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   # Rollout all the games to completion.
   current_policy = our_policy
   other_policy = their_policy
-  matches_complete = 0
   
   move_made = True
   while move_made:
@@ -154,24 +153,63 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   
   return wins / num_matches
   
+def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
+  log('Training policy by (parallel) RL', end='')
+  states = [bt.Breakthrough() for _ in range(num_matches)]
+
+  # We start all the even numbered games, they start all the odd ones.  Advance all the odd numbered games by a turn
+  # so that it's our turn in every game.
+  for state in states[1::2]:
+    index = their_policy.get_action_index(state)
+    state.apply(bt.convert_index_to_move(index, state.player))
+
+  # For each game, record the states encountered, actions taken and final outcomes.
+  training_states  = [[] for _ in range(num_matches)]
+  training_actions = [[] for _ in range(num_matches)]
+  training_rewards = [None] * num_matches
+  
+  # Rollout all the games to completion.
+  current_policy = our_policy
+  other_policy = their_policy
+  
+  move_made = True
+  while move_made:
+    # Compute the next move for each game in parallel
+    move_made = False    
+    for (index, state, action) in zip(range(num_matches), states, current_policy.get_action_indicies(states)):
+      if not state.terminated:
+        if current_policy is our_policy:
+          training_states[index].append(state)
+          training_actions[index].append(action)
+        state.apply(bt.convert_index_to_move(action, state.player))
+        move_made = True
+      
+    # Now the it's the other player's turn, so swap policies.
+    current_policy, other_policy = other_policy, current_policy
+
+  # Calculate the reward from the point of view of our_policy
+  for index, state in enumerate(states):
+    training_rewards[index] = state.reward * (1 if index % 2 == 0 else -1)
+
+  # Train the policy via reinforcement learning    
+  for (states, actions, reward) in zip(training_states, training_actions, training_rewards):
+    log_progress()
+    our_policy.reinforce(states, actions, reward)
+  
+  print('')
+  
 def reinforce(num_matches = 100):
   # Load the trained policies
   our_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
   their_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
-  
-  # !! ARR Single sample RL update
-  state = bt.Breakthrough()
-  action_probs = our_policy.get_action_probs(state)
-  action = np.argmax(action_probs)
-  our_policy.reinforce(state, action, 1)
-  new_action_probs = our_policy.get_action_probs(state)
-  
-  log('p(%d) was %f, now %f' % (action, action_probs[action], new_action_probs[action]))
-    
-  # !! ARR For now, just compare 2 policies
-  log('Comparing policies')
-  log('Our policy won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
 
+  for _ in range(10):
+    reinforce_in_parallel(our_policy, their_policy)
+    log('Comparing policies')
+    log('Our policy won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
+  
+  # !! ARR This will overfit to beating epoch99.  Need to train against self + other epochs. 
+      
 def main(argv):
   quit = False
   while not quit:
