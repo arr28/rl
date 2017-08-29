@@ -181,7 +181,7 @@ def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
     for (index, state, action) in zip(range(num_matches), states, current_policy.get_action_indicies(states)):
       if not state.terminated:
         if current_policy is our_policy:
-          training_states[index].append(state)
+          training_states[index].append(bt.Breakthrough(state))
           training_actions[index].append(action)
         state.apply(bt.convert_index_to_move(action, state.player))
         move_made = True
@@ -207,7 +207,7 @@ def reinforce(num_matches=100):
   their_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
 
   our_policy.prepare_for_reinforcement()
-  for _ in range(10):
+  for _ in range(100):
     pre_train_win_rate = reinforce_in_parallel(our_policy, their_policy, num_matches)
     log('Our policy won %f%% of the matches' % (pre_train_win_rate * 100))
   
