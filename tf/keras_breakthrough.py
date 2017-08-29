@@ -18,6 +18,8 @@ import sys
 from logger import log, log_progress
 from policy import CNPolicy
 
+PRIMARY_CHECKPOINT = 'model.epoch99.hdf5'
+
 def train():
   log('Creating policy')
   policy = CNPolicy()
@@ -61,7 +63,7 @@ def convert_index_to_move(index, player):
 
 def predict():
   # Load the trained policy
-  policy = CNPolicy(checkpoint='model.epoch99.hdf5')
+  policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
   
   # Advance the game to the desired state
   history = input('Input game history: ')
@@ -154,7 +156,7 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   return wins / num_matches
   
 def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
-  log('Training policy by (parallel) RL', end='')
+  log('Training policy by (parallel) RL')
   states = [bt.Breakthrough() for _ in range(num_matches)]
 
   # We start all the even numbered games, they start all the odd ones.  Advance all the odd numbered games by a turn
@@ -188,28 +190,29 @@ def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
     current_policy, other_policy = other_policy, current_policy
 
   # Calculate the reward from the point of view of our_policy
+  wins = 0
   for index, state in enumerate(states):
     training_rewards[index] = state.reward * (1 if index % 2 == 0 else -1)
+    if training_rewards[index] == 1: wins += 1
 
   # Train the policy via reinforcement learning    
   for (states, actions, reward) in zip(training_states, training_actions, training_rewards):
-    log_progress()
     our_policy.reinforce(states, actions, reward)
-  
-  print('')
-  
-def reinforce(num_matches = 100):
-  # Load the trained policies
-  our_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
-  their_policy = CNPolicy(checkpoint='model.epoch99.hdf5')
 
-  for _ in range(10):
-    reinforce_in_parallel(our_policy, their_policy)
-    log('Comparing policies')
-    log('Our policy won %d%% of the matches' % (int(compare_policies_in_parallel(our_policy, their_policy, num_matches) * 100)))
+  return wins / num_matches
   
-  # !! ARR This will overfit to beating epoch99.  Need to train against self + other epochs. 
-      
+def reinforce(num_matches=100):
+  # Load the trained policies
+  our_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  their_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+
+  our_policy.prepare_for_reinforcement()
+  for _ in range(10):
+    pre_train_win_rate = reinforce_in_parallel(our_policy, their_policy, num_matches)
+    log('Our policy won %f%% of the matches' % (pre_train_win_rate * 100))
+  
+  # !! ARR This will overfit to beating their_policy.  Need to train against self + other epochs. 
+
 def main(argv):
   quit = False
   while not quit:

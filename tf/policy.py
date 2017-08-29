@@ -95,6 +95,9 @@ class CNPolicy:
         actions.append(self._get_weighted_legal(state, action_probs))
     return actions
   
+  def prepare_for_reinforcement(self):
+    self._model.compile(loss=reinforcement_loss, optimizer=SGD(lr = 0.001))
+    
   def reinforce(self, states, actions, reward):
     samples = len(states)    
     nn_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
@@ -103,7 +106,7 @@ class CNPolicy:
       self.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
       nn_actions[ii][actions[ii]] = 1
     
-    self._model.compile(loss=reinforcement_loss, optimizer=SGD(lr = 0.01 * reward)) # !! ARR Too hot?
+    K.set_value(self._model.optimizer.lr, abs(K.get_value(self._model.optimizer.lr)) * reward)
     self._model.train_on_batch(nn_states, nn_actions)
     
 ''' ========== Static methods ========== '''
