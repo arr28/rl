@@ -209,7 +209,7 @@ def reinforce(num_matches=100):
   our_policy.prepare_for_reinforcement()
   for _ in range(100):
     pre_train_win_rate = reinforce_in_parallel(our_policy, their_policy, num_matches)
-    log('Our policy won %f%% of the matches' % (pre_train_win_rate * 100))
+    log('Our policy won %0.1f%% of the matches' % (pre_train_win_rate * 100))
   
   # !! ARR This will overfit to beating their_policy.  Need to train against self + other epochs. 
 
