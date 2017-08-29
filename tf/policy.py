@@ -74,6 +74,10 @@ class CNPolicy:
     index = -1
     legal = False
     while not legal:
+      if index != -1:
+        # Avoid picking this action again and re-normalise the probabilities.
+        action_probs[index] = 0
+        action_probs /= action_probs.sum()
       index = np.random.choice(bt.ACTIONS, p=action_probs)
       legal = state.is_legal(bt.convert_index_to_move(index, state.player))
     return index
