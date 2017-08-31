@@ -81,7 +81,7 @@ def predict():
   for index in sorted_indices:
     trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
     greedy_win = rollout(policy, trial_state, greedy=True) == desired_reward
-    win_rate = evaluate(trial_state, policy)
+    win_rate = evaluate_for(trial_state, policy, state.player)
     log("Play %s with probability %f (%s) for win rate %d%%" % 
         (convert_index_to_move(index, state.player), 
          prediction[index], 
@@ -92,6 +92,7 @@ def predict():
   rollout(policy, state, greedy=True, show=True)
 
 def rollout(policy, state, greedy=False, show=False):
+  state = bt.Breakthrough(state)
   while not state.terminated:
     # Pick the next action, either greedily or weighted by the policy
     index = -1
@@ -102,11 +103,11 @@ def rollout(policy, state, greedy=False, show=False):
       index = policy.get_action_index(state)
     str_move = convert_index_to_move(index, state.player)
     if show: print('Playing %s' % str_move)
-    state = bt.Breakthrough(state, lg.decode_move(str_move))
+    state.apply(lg.decode_move(str_move))
     if show: print(state)
   return state.reward
 
-def evaluate(initial_state, policy, num_rollouts=100):
+def evaluate_for(initial_state, policy, player, num_rollouts=100):
   states = [bt.Breakthrough(initial_state) for _ in range(num_rollouts)]
   
   move_made = True
@@ -119,7 +120,7 @@ def evaluate(initial_state, policy, num_rollouts=100):
   
   wins = 0
   for state in states:
-    if state.is_win_for(initial_state.player): wins += 1    
+    if state.is_win_for(player): wins += 1
   return wins / num_rollouts
 
 def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
@@ -189,7 +190,7 @@ def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
     # Now the it's the other player's turn, so swap policies.
     current_policy, other_policy = other_policy, current_policy
 
-  # Calculate the reward from the point of view of our_policy
+  # Calculate the reward from the point of view of our_policy.
   wins = 0
   for index, state in enumerate(states):
     training_rewards[index] = state.reward * (1 if index % 2 == 0 else -1)
