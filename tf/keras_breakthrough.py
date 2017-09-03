@@ -41,10 +41,7 @@ def train():
   # training.  Otherwise the evaluation data in the 2nd run is data that the network has already seen in the 1st.
   log('  Shuffling data consistently')
   np.random.seed(0)
-  rng_state = np.random.get_state()
-  np.random.shuffle(nn_states)
-  np.random.set_state(rng_state)
-  np.random.shuffle(action_probs)
+  pair_shuffle(nn_states, action_probs)
 
   log('  Splitting data')
   split_point = int(samples * 0.8)
@@ -97,8 +94,7 @@ def rollout(policy, state, greedy=False, show=False):
     # Pick the next action, either greedily or weighted by the policy
     index = -1
     if greedy:
-      prediction = policy.get_action_probs(state)
-      index = np.argmax(prediction)
+      index = get_best_legal(state, policy)
     else:
       index = policy.get_action_index(state)
     str_move = convert_index_to_move(index, state.player)
@@ -107,6 +103,17 @@ def rollout(policy, state, greedy=False, show=False):
     if show: print(state)
   return state.reward
 
+def get_best_legal(state, policy):
+  index = -1
+  action_probs = policy.get_action_probs(state)
+  legal = False
+  while not legal:
+    if index != -1:
+      action_probs[index] = 0
+    index = np.argmax(action_probs)
+    legal = state.is_legal(bt.convert_index_to_move(index, state.player))
+  return index
+  
 def evaluate_for(initial_state, policy, player, num_rollouts=100):
   states = [bt.Breakthrough(initial_state) for _ in range(num_rollouts)]
   
@@ -158,15 +165,15 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   
 def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
   log('Training policy by (parallel) RL')
-  states = [bt.Breakthrough() for _ in range(num_matches)]
+  match_states = [bt.Breakthrough() for _ in range(num_matches)]
 
-  # We start all the even numbered games, they start all the odd ones.  Advance all the odd numbered games by a turn
-  # so that it's our turn in every game.
-  for state in states[1::2]:
-    index = their_policy.get_action_index(state)
-    state.apply(bt.convert_index_to_move(index, state.player))
+  # We start all the even numbered matches, they start all the odd ones.  Advance all the odd numbered ones by a turn
+  # so that it's our turn in every match.
+  for match_state in match_states[1::2]:
+    index = their_policy.get_action_index(match_state)
+    match_state.apply(bt.convert_index_to_move(index, match_state.player))
 
-  # For each game, record the states encountered, actions taken and final outcomes.
+  # For each match, record the states encountered, actions taken and final outcomes.
   training_states  = [[] for _ in range(num_matches)]
   training_actions = [[] for _ in range(num_matches)]
   training_rewards = [None] * num_matches
@@ -179,7 +186,9 @@ def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
   while move_made:
     # Compute the next move for each game in parallel
     move_made = False    
-    for (index, state, action) in zip(range(num_matches), states, current_policy.get_action_indicies(states)):
+    for (index, state, action) in zip(range(num_matches), 
+                                      match_states, 
+                                      current_policy.get_action_indicies(match_states)):
       if not state.terminated:
         if current_policy is our_policy:
           training_states[index].append(bt.Breakthrough(state))
@@ -191,26 +200,53 @@ def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
     current_policy, other_policy = other_policy, current_policy
 
   # Calculate the reward from the point of view of our_policy.
+  winning_states = []
+  winning_actions = []
+  losing_states = []
+  losing_actions = []
   wins = 0
-  for index, state in enumerate(states):
-    training_rewards[index] = state.reward * (1 if index % 2 == 0 else -1)
-    if training_rewards[index] == 1: wins += 1
+  for index, final_state in enumerate(match_states):
+    our_player = index % 2
+    training_rewards[index] = final_state.reward * (1 if (our_player == 0) else -1)
+    if final_state.is_win_for(our_player):
+      wins += 1
+      winning_states.extend(training_states[index])
+      winning_actions.extend(training_actions[index])
+    else:
+      losing_states.extend(training_states[index])
+      losing_actions.extend(training_actions[index])
+
+  # Shuffle states to break similarity between adjacent states in training set.
+  # !! ARR Would really like to not put through all the +ve and then all the -ve samples, but don't know how to
+  # !! ARR set lr per sample. 
+  pair_shuffle(losing_states, losing_actions)
+  pair_shuffle(winning_states, winning_actions)
 
   # Train the policy via reinforcement learning    
-  for (states, actions, reward) in zip(training_states, training_actions, training_rewards):
-    our_policy.reinforce(states, actions, reward)
+  our_policy.reinforce(losing_states, losing_actions, -1.0)
+  our_policy.reinforce(winning_states, winning_actions, 1.0)
 
   return wins / num_matches
-  
-def reinforce(num_matches=100):
+
+''' Shuffle a pair of list keeping matching indicies aligned '''
+def pair_shuffle(list1, list2):
+  rng_state = np.random.get_state()
+  np.random.shuffle(list1)
+  np.random.set_state(rng_state)
+  np.random.shuffle(list2)
+    
+def reinforce(num_matches=16, num_eval_matches=1000):
   # Load the trained policies
   our_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
   their_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
 
   our_policy.prepare_for_reinforcement()
-  for _ in range(100):
-    pre_train_win_rate = reinforce_in_parallel(our_policy, their_policy, num_matches)
-    log('Our policy won %0.1f%% of the matches' % (pre_train_win_rate * 100))
+  for _ in range(1000):    
+    for _ in range(100):
+      pre_train_win_rate = reinforce_in_parallel(our_policy, their_policy, num_matches)
+      log('Our policy won %0.1f%% of the matches' % (pre_train_win_rate * 100))
+    in_depth_win_rate = compare_policies_in_parallel(our_policy, their_policy, num_matches=num_eval_matches)
+    log('In-depth evaluation yields %0.1f%% win rate' % (in_depth_win_rate * 100))
   
   # !! ARR This will overfit to beating their_policy.  Need to train against self + other epochs. 
 

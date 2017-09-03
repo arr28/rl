@@ -13,8 +13,10 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.layers import Conv2D, Dense, Dropout, Flatten
 from keras.models import Sequential, load_model
 from keras.optimizers import SGD, Adam
+from logger import log, log_progress
 
 LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
+REINFORCEMENT_LEARNING_RATE = 0.001
 
 class CNPolicy:
   
@@ -77,7 +79,13 @@ class CNPolicy:
       if index != -1:
         # Avoid picking this action again and re-normalise the probabilities.
         action_probs[index] = 0
-        action_probs /= action_probs.sum()
+        total_action_probs = action_probs.sum()
+        if total_action_probs == 0:
+          log('Oh dear - no legal action with any weight in state...')
+          print(state)
+          log('Action probabilities (after adjustment) are...')
+          log(action_probs)
+        action_probs /= total_action_probs
       index = np.random.choice(bt.ACTIONS, p=action_probs)
       legal = state.is_legal(bt.convert_index_to_move(index, state.player))
     return index
@@ -100,8 +108,8 @@ class CNPolicy:
     return actions
   
   def prepare_for_reinforcement(self):
-    self._model.compile(loss=reinforcement_loss, optimizer=SGD(lr = 0.001))
-    
+    self._model.compile(loss=reinforcement_loss, optimizer=SGD(lr = REINFORCEMENT_LEARNING_RATE))
+        
   def reinforce(self, states, actions, reward):
     samples = len(states)    
     nn_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
@@ -110,7 +118,7 @@ class CNPolicy:
       self.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
       nn_actions[ii][actions[ii]] = 1
     
-    K.set_value(self._model.optimizer.lr, abs(K.get_value(self._model.optimizer.lr)) * reward)
+    K.set_value(self._model.optimizer.lr, REINFORCEMENT_LEARNING_RATE * reward)
     self._model.train_on_batch(nn_states, nn_actions)
     
 ''' ========== Static methods ========== '''
