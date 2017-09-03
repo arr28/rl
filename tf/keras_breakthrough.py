@@ -164,7 +164,6 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   return wins / num_matches
   
 def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
-  log('Training policy by (parallel) RL')
   match_states = [bt.Breakthrough() for _ in range(num_matches)]
 
   # We start all the even numbered matches, they start all the odd ones.  Advance all the odd numbered ones by a turn
@@ -236,6 +235,7 @@ def pair_shuffle(list1, list2):
   np.random.shuffle(list2)
     
 def reinforce(num_matches=16, num_eval_matches=1000):
+  log('Training policy by (parallel) RL')
   # Load the trained policies
   our_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
   their_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
