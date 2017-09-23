@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import breakthrough as bt
 import keras.backend as K
+import little_golem as lg
 import nn
 import numpy as np
 import os
@@ -16,7 +17,7 @@ from keras.optimizers import SGD, Adam
 from logger import log, log_progress
 
 LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
-REINFORCEMENT_LEARNING_RATE = 0.001
+REINFORCEMENT_LEARNING_RATE = 0.0001
 
 class CNPolicy:
   
@@ -85,6 +86,7 @@ class CNPolicy:
           print(state)
           log('Action probabilities (after adjustment) are...')
           log(action_probs)
+          log('Last cleared action was %s (%d)' % (lg.encode_move(bt.convert_index_to_move(index, state.player)), index))
         action_probs /= total_action_probs
       index = np.random.choice(bt.ACTIONS, p=action_probs)
       legal = state.is_legal(bt.convert_index_to_move(index, state.player))
@@ -116,9 +118,9 @@ class CNPolicy:
     nn_actions = np.zeros((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
     for ii, state in enumerate(states):
       self.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
-      nn_actions[ii][actions[ii]] = 1
+      nn_actions[ii][actions[ii]] = reward
     
-    K.set_value(self._model.optimizer.lr, REINFORCEMENT_LEARNING_RATE * reward)
+    # K.set_value(self._model.optimizer.lr, REINFORCEMENT_LEARNING_RATE * reward)
     self._model.train_on_batch(nn_states, nn_actions)
     
 ''' ========== Static methods ========== '''
@@ -129,4 +131,6 @@ def reinforcement_loss(y_true, y_pred):
     y_pred is the network's outputs.
     '''
     # Only adjust the network weights for the played action.  (Multiplying by the one-hot vector achieves this.)
-    return -y_true * K.log(K.clip(y_pred, K.epsilon(), 1.0 - K.epsilon()))
+    result = -K.sum(y_true * K.log(K.clip(y_pred, K.epsilon(), 1.0 - K.epsilon())))
+    log(result)
+    return result 
