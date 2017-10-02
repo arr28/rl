@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 
 import breakthrough as bt
+from ggp import run_ggp
 import little_golem as lg
 import nn
 import numpy as np
@@ -250,17 +251,22 @@ def reinforce(num_matches=16, num_eval_matches=1000):
   
   # !! ARR This will overfit to beating their_policy.  Need to train against self + other epochs. 
 
+def ggp():
+  run_ggp()
+  
 def main(argv):
   quit = False
   while not quit:
     log('', end='')
-    cmd = input("** Running with Keras **  Train (t), predict (p), reinforce (r) or quit (q)? ").lower()
+    cmd = input("** Running with Keras **  Train (t), predict (p), reinforce (r), GGP (g) or quit (q)? ").lower()
     if cmd == 'train' or cmd == 't':
       train()
     elif cmd == 'predict' or cmd == 'p':
       predict()
     elif cmd == 'reinforce' or cmd == 'r':
       reinforce()
+    if cmd == 'ggp' or cmd == 'g':
+      ggp()
     elif cmd == 'quit' or cmd == 'q':
       quit= True
   log('Done')
