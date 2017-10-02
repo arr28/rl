@@ -1,19 +1,24 @@
 import breakthrough as bt
+import little_golem as lg
+import numpy as np
 import re
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from policy import CNPolicy
 
-match = None
+PRIMARY_CHECKPOINT = 'model.epoch99.hdf5'
+
+state = None
 role = None
-
-def __static_init():
-  global match
-  global role
+policy = None
 
 def run_ggp():
+  global policy
+  policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
   httpd = HTTPServer(('', 9147), GGPRequestHandler)
   httpd.serve_forever()
-  
+  # The above method never returns.  Don't add anything below this line.
+    
 class GGPRequestHandler(BaseHTTPRequestHandler):
   def do_GET(self):
     print('GET of %s' % self.path)
@@ -21,8 +26,9 @@ class GGPRequestHandler(BaseHTTPRequestHandler):
     self.end_headers()
 
   def do_POST(self):
-    global match
+    global state
     global role
+    global policy
     
     print('POST to %s' % self.path)
     length = self.headers.get('content-length')
@@ -33,7 +39,7 @@ class GGPRequestHandler(BaseHTTPRequestHandler):
     if request.startswith('( INFO )'):
       response = '( (name Mimic) (status available) )'
     elif request.startswith('( START '):
-      match = bt.Breakthrough()
+      state = bt.Breakthrough()
       if request.split(sep=' ')[3] == 'white':
         print('We are white')
         role = 0
@@ -46,14 +52,28 @@ class GGPRequestHandler(BaseHTTPRequestHandler):
       # !! ARR Parse out the last move (remembering it might be NIL)
       move = parsed_play_req.group(1)
       move = move.replace('noop', '').replace('move', '').replace('(', '').replace(')', '').replace(' ', '')
-      print('Move was %s' % move)
       if move != 'NIL':
+        print('Raw move was %s' % move)
         move = list(move)
         src_col = 8 - int(move[0])
         src_row = int(move[1]) - 1
         dst_col = 8 - int(move[2])
         dst_row = int(move[3]) - 1
-        match.apply((src_row, src_col, dst_row, dst_col))
+        move = (src_row, src_col, dst_row, dst_col)
+        print('Move was %s' % lg.encode_move(move))
+        state.apply(move)
+      else:
+        print('First move')
+
+      prediction = policy.get_action_probs(state)
+      index = np.argsort(prediction)[::-1][0]
+      move = bt.convert_index_to_move(index, state.player)
+      print('Would play %s' % (lg.encode_move(move)))
+      src_row = move[0] + 1
+      src_col = 8 - move[1]
+      dst_row = move[2] + 1
+      dst_col = 8 - move[3]
+      response = '( move %d %d %d %d )' % (src_col, src_row, dst_col, dst_row)
 
     print('Responding with %s' % response)    
     response_bytes = response.encode('ascii')
