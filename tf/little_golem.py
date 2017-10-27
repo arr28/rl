@@ -22,7 +22,9 @@ def load_data(min_rounds=20):
                   'Thomas', 'nietsabes', 'Dvd Avins', 'pim', 'Luca Bruzzi', 'Cassiel', 'emilioes', 'vstjrt', # 1653
                   'Christian K', 'diego44', 'steve1964', 'lin1234', 'siroman', 'Tony', 'RoByN', 'slaapgraag', # 1641
                   'Tobias Lang', 'Rex Moore', 'Jonas', 'Richard Malaschitz', 'I R I', 'Peter Koning', 'Ryan'} # 1616
+  state_hits = {}
   data = {}
+  rewards = {}
 
   num_matches = 0
   num_moves = 0
@@ -30,6 +32,7 @@ def load_data(min_rounds=20):
 
   white_matcher = re.compile('\[White "(.*)"\]')
   black_matcher = re.compile('\[Black "(.*)"\]')
+  result_matcher = re.compile('\[Result "(\d)-."\]')
   
   # Load all the matches with at least 20 moves each.  Shorter matches are typically test matches or matches played by complete beginners.
   log('Loading data', end='')
@@ -39,6 +42,7 @@ def load_data(min_rounds=20):
     if 'Event' in line:
       white_good = False
       black_good = False
+      result_good = False
       
     match = white_matcher.match(line)
     if match:
@@ -48,8 +52,13 @@ def load_data(min_rounds=20):
     if match:
       black_good = match.group(1) in good_players
     
+    match = result_matcher.match(line)
+    if match:
+      result_good = True
+      result = match.group(1)
+      
     round_marker = str(min_rounds) + '.'  
-    if line.startswith('1.') and round_marker in line and white_good and black_good:
+    if line.startswith('1.') and round_marker in line and white_good and black_good and result_good:
       num_matches += 1
       match = bt.Breakthrough()
       for part in line.split(' '):
@@ -62,9 +71,13 @@ def load_data(min_rounds=20):
           # Add a training example
           if match in data:
             num_duplicate_hits += 1
+            state_hits[match] += 1
           else:
+            state_hits[match] = 1
             data[match] = np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE)
+            rewards[match] = 0.0
           data[match][bt.convert_move_to_index(move)] += 1
+          rewards[match] += float(result)
 
           # Process the move to get the new state
           match = bt.Breakthrough(match, move)
@@ -75,12 +88,13 @@ def load_data(min_rounds=20):
   
   # Normalise the action probabilities
   log('  Normalising data')
-  for action_probs in iter(data.values()):
-    total = action_probs.sum()
+  for state, action_probs in data.items():
+    hits = state_hits[state]
+    rewards[state] /= hits
     for ii in range(bt.ACTIONS):
-      action_probs[ii] /= total
+      action_probs[ii] /= hits
       
-  return data
+  return data, rewards
 
 def decode_move(move):
   (src, dst) = re.split('x|\-', move)

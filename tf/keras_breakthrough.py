@@ -25,7 +25,7 @@ def train():
   policy = CNPolicy()
 
   # Load the data  
-  all_data = lg.load_data(min_rounds=20)
+  all_data, all_rewards = lg.load_data(min_rounds=20)
   samples = len(all_data);
   
   log('  Sorting data')
@@ -36,21 +36,23 @@ def train():
   for ii, state in enumerate(states):
     policy.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
     np.copyto(action_probs[ii:ii+1].reshape(bt.ACTIONS), all_data[state])
-    rewards[ii] = 0  # !! ARR Fix up rewards
+    rewards[ii] = all_rewards[state]
     
   # Split into training and validation sets.
   # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming
   # training.  Otherwise the evaluation data in the 2nd run is data that the network has already seen in the 1st.
   log('  Shuffling data consistently')
   np.random.seed(0)
-  pair_shuffle(nn_states, action_probs)
+  shuffle_together(nn_states, action_probs, rewards)
 
   log('  Splitting data')
   split_point = int(samples * 0.8)
   train_states = nn_states[:split_point]
   train_action_probs = action_probs[:split_point]
+  train_rewards = rewards[:split_point]
   eval_states = nn_states[split_point:]
   eval_action_probs = action_probs[split_point:]
+  eval_rewards = rewards[split_point:]
   log('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   log('Training')
@@ -165,12 +167,14 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   
   return wins / num_matches
   
-''' Shuffle a pair of list keeping matching indicies aligned '''
-def pair_shuffle(list1, list2):
+''' Shuffle a set of lists keeping matching indices aligned '''
+def shuffle_together(list1, list2, list3):
   rng_state = np.random.get_state()
   np.random.shuffle(list1)
   np.random.set_state(rng_state)
   np.random.shuffle(list2)
+  np.random.set_state(rng_state)
+  np.random.shuffle(list3)
     
 def ggp():
   run_ggp()
