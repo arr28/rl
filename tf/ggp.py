@@ -65,15 +65,19 @@ class GGPRequestHandler(BaseHTTPRequestHandler):
       else:
         print('First move')
 
-      prediction = policy.get_action_probs(state)
-      index = np.argsort(prediction)[::-1][0]
-      move = bt.convert_index_to_move(index, state.player)
-      print('Would play %s' % (lg.encode_move(move)))
-      src_row = move[0] + 1
-      src_col = 8 - move[1]
-      dst_row = move[2] + 1
-      dst_col = 8 - move[3]
-      response = '( move %d %d %d %d )' % (src_col, src_row, dst_col, dst_row)
+      if state.player == role:
+        prediction = policy.get_action_probs(state)
+        index = np.argsort(prediction)[::-1][0]
+        move = bt.convert_index_to_move(index, state.player)
+        print('Playing %s' % (lg.encode_move(move)))
+        src_row = move[0] + 1
+        src_col = 8 - move[1]
+        dst_row = move[2] + 1
+        dst_col = 8 - move[3]
+        response = '( move %d %d %d %d )' % (src_col, src_row, dst_col, dst_row)
+      else:
+        print('Not our turn - no-op')
+        response = 'noop'
 
     print('Responding with %s' % response)    
     response_bytes = response.encode('ascii')
