@@ -76,7 +76,7 @@ class CNPolicy:
   def get_action_probs(self, state):
     predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))
     for _, prediction in enumerate(predictions):
-      return prediction
+      return prediction[0]
     
   def _get_weighted_legal(self, state, action_probs):
     index = -1
@@ -105,7 +105,7 @@ class CNPolicy:
     batch_input = np.empty((len(states), 8, 8, 6), dtype=nn.DATA_TYPE)
     for ii, state in enumerate(states):
       self.convert_state(state, batch_input[ii:ii+1].reshape((8, 8, 6)))
-    predictions = self._model.predict(batch_input)
+    predictions = self._model.predict(batch_input)[0]
     actions = []
     for state, action_probs in zip(states, predictions):
       if state.terminated:
