@@ -122,7 +122,7 @@ def get_best_legal(state, policy):
     legal = state.is_legal(bt.convert_index_to_move(index, state.player))
   return index
   
-def evaluate_for(initial_state, policy, player, num_rollouts=100):
+def evaluate_for(initial_state, policy, player, num_rollouts=1000):
   states = [bt.Breakthrough(initial_state) for _ in range(num_rollouts)]
   
   move_made = True
