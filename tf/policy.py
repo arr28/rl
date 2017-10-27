@@ -114,28 +114,3 @@ class CNPolicy:
         actions.append(self._get_weighted_legal(state, action_probs))
     return actions
   
-  def prepare_for_reinforcement(self):
-    self._model.compile(loss=reinforcement_loss, optimizer=SGD(lr = REINFORCEMENT_LEARNING_RATE))
-        
-  def reinforce(self, states, actions, reward):
-    samples = len(states)    
-    nn_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
-    nn_actions = np.zeros((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
-    for ii, state in enumerate(states):
-      self.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
-      nn_actions[ii][actions[ii]] = reward
-    
-    # K.set_value(self._model.optimizer.lr, REINFORCEMENT_LEARNING_RATE * reward)
-    self._model.train_on_batch(nn_states, nn_actions)
-    
-''' ========== Static methods ========== '''
-def reinforcement_loss(y_true, y_pred):
-    '''Loss function for the REINFORCE algorithm.
-    
-    y_true is a one-hot vector of the action taken.
-    y_pred is the network's outputs.
-    '''
-    # Only adjust the network weights for the played action.  (Multiplying by the one-hot vector achieves this.)
-    result = -K.sum(y_true * K.log(K.clip(y_pred, K.epsilon(), 1.0 - K.epsilon())))
-    log(result)
-    return result 

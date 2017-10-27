@@ -1,8 +1,7 @@
 # !! ARR Ideas for improvement
 #
 # - Add reflections to the dataset (being careful about interactions with deduplication)
-# - Measure prediction speed (how would it do in a Monte Carlo rollout?)
-# - Parallel rollouts
+# - AlphaGo-Zero approach to reinforcement learning
 
 from __future__ import absolute_import
 from __future__ import division
@@ -166,70 +165,6 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
   
   return wins / num_matches
   
-def reinforce_in_parallel(our_policy, their_policy, num_matches = 100):
-  match_states = [bt.Breakthrough() for _ in range(num_matches)]
-
-  # We start all the even numbered matches, they start all the odd ones.  Advance all the odd numbered ones by a turn
-  # so that it's our turn in every match.
-  for match_state in match_states[1::2]:
-    index = their_policy.get_action_index(match_state)
-    match_state.apply(bt.convert_index_to_move(index, match_state.player))
-
-  # For each match, record the states encountered, actions taken and final outcomes.
-  training_states  = [[] for _ in range(num_matches)]
-  training_actions = [[] for _ in range(num_matches)]
-  training_rewards = [None] * num_matches
-  
-  # Rollout all the games to completion.
-  current_policy = our_policy
-  other_policy = their_policy
-  
-  move_made = True
-  while move_made:
-    # Compute the next move for each game in parallel
-    move_made = False    
-    for (index, state, action) in zip(range(num_matches), 
-                                      match_states, 
-                                      current_policy.get_action_indicies(match_states)):
-      if not state.terminated:
-        if current_policy is our_policy:
-          training_states[index].append(bt.Breakthrough(state))
-          training_actions[index].append(action)
-        state.apply(bt.convert_index_to_move(action, state.player))
-        move_made = True
-      
-    # Now the it's the other player's turn, so swap policies.
-    current_policy, other_policy = other_policy, current_policy
-
-  # Calculate the reward from the point of view of our_policy.
-  winning_states = []
-  winning_actions = []
-  losing_states = []
-  losing_actions = []
-  wins = 0
-  for index, final_state in enumerate(match_states):
-    our_player = index % 2
-    training_rewards[index] = final_state.reward * (1 if (our_player == 0) else -1)
-    if final_state.is_win_for(our_player):
-      wins += 1
-      winning_states.extend(training_states[index])
-      winning_actions.extend(training_actions[index])
-    else:
-      losing_states.extend(training_states[index])
-      losing_actions.extend(training_actions[index])
-
-  # Shuffle states to break similarity between adjacent states in training set.
-  # !! ARR Would really like to not put through all the +ve and then all the -ve samples, but don't know how to
-  # !! ARR set lr per sample. 
-  pair_shuffle(losing_states, losing_actions)
-  pair_shuffle(winning_states, winning_actions)
-
-  # Train the policy via reinforcement learning    
-  our_policy.reinforce(losing_states, losing_actions, -1.0)
-  our_policy.reinforce(winning_states, winning_actions, 1.0)
-
-  return wins / num_matches
-
 ''' Shuffle a pair of list keeping matching indicies aligned '''
 def pair_shuffle(list1, list2):
   rng_state = np.random.get_state()
@@ -237,22 +172,6 @@ def pair_shuffle(list1, list2):
   np.random.set_state(rng_state)
   np.random.shuffle(list2)
     
-def reinforce(num_matches=100, num_eval_matches=1000):
-  log('Training policy by (parallel) RL')
-  # Load the trained policies
-  our_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  their_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-
-  our_policy.prepare_for_reinforcement()
-  for _ in range(1000):    
-    for _ in range(100):
-      pre_train_win_rate = reinforce_in_parallel(our_policy, their_policy, num_matches)
-      log('Our policy won %0.1f%% of the matches' % (pre_train_win_rate * 100))
-    in_depth_win_rate = compare_policies_in_parallel(our_policy, their_policy, num_matches=num_eval_matches)
-    log('In-depth evaluation yields %0.1f%% win rate' % (in_depth_win_rate * 100))
-  
-  # !! ARR This will overfit to beating their_policy.  Need to train against self + other epochs. 
-
 def ggp():
   run_ggp()
   
@@ -260,13 +179,11 @@ def main(argv):
   quit = False
   while not quit:
     log('', end='')
-    cmd = input("** Running with Keras **  Train (t), predict (p), reinforce (r), GGP (g) or quit (q)? ").lower()
+    cmd = input("** Running with Keras **  Train (t), predict (p), GGP (g) or quit (q)? ").lower()
     if cmd == 'train' or cmd == 't':
       train()
     elif cmd == 'predict' or cmd == 'p':
       predict()
-    elif cmd == 'reinforce' or cmd == 'r':
-      reinforce()
     if cmd == 'ggp' or cmd == 'g':
       ggp()
     elif cmd == 'quit' or cmd == 'q':
