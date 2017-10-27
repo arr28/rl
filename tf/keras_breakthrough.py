@@ -33,9 +33,11 @@ def train():
   states = sorted(all_data.keys())
   nn_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
   action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
+  rewards = np.empty((samples, 1), dtype=nn.DATA_TYPE)
   for ii, state in enumerate(states):
     policy.convert_state(state, nn_states[ii:ii+1].reshape((8, 8, 6)))
     np.copyto(action_probs[ii:ii+1].reshape(bt.ACTIONS), all_data[state])
+    rewards[ii] = 0  # !! ARR Fix up rewards
     
   # Split into training and validation sets.
   # Use a fixed seed to get reproducibility over different runs.  This is especially important when resuming
@@ -53,7 +55,7 @@ def train():
   log('  %d training samples vs %d evaluation samples' % (split_point, samples - split_point))
   
   log('Training')
-  policy.train(train_states, train_action_probs, eval_states, eval_action_probs)  
+  policy.train(train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=100)  
   
 def convert_index_to_move(index, player):
   move = bt.convert_index_to_move(index, player)
@@ -115,7 +117,7 @@ def get_best_legal(state, policy):
     legal = state.is_legal(bt.convert_index_to_move(index, state.player))
   return index
   
-def evaluate_for(initial_state, policy, player, num_rollouts=100):
+def evaluate_for(initial_state, policy, player, num_rollouts=1000):
   states = [bt.Breakthrough(initial_state) for _ in range(num_rollouts)]
   
   move_made = True
@@ -235,7 +237,7 @@ def pair_shuffle(list1, list2):
   np.random.set_state(rng_state)
   np.random.shuffle(list2)
     
-def reinforce(num_matches=16, num_eval_matches=1000):
+def reinforce(num_matches=100, num_eval_matches=1000):
   log('Training policy by (parallel) RL')
   # Load the trained policies
   our_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)

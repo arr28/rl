@@ -11,8 +11,8 @@ import os
 import tempfile
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
-from keras.layers import Conv2D, Dense, Dropout, Flatten
-from keras.models import Sequential, load_model
+from keras.layers import Input, Conv2D, Dense, Dropout, Flatten
+from keras.models import Model, Sequential, load_model
 from keras.optimizers import SGD, Adam
 from logger import log, log_progress
 
@@ -25,24 +25,29 @@ class CNPolicy:
     if checkpoint:
       self._model = load_model(os.path.join(LOG_DIR, checkpoint))
     else:
-      self._model = Sequential()
-      self._model.add(Conv2D(input_shape=(8, 8, 6), filters=64, kernel_size=[5,5], padding='same', activation='relu'))
-      for _ in range(num_conv_layers - 1):
-        self._model.add(Conv2D(filters=128, kernel_size=[3,3], padding='same', activation='relu'))
-      self._model.add(Flatten())
-      self._model.add(Dropout(0.9))
-      self._model.add(Dense(bt.ACTIONS, activation='softmax'))  
+      log('Creating model with functional API')
 
-  def train(self, train_states, train_action_probs, eval_states, eval_action_probs, epochs=40):
-    self._model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001), metrics=['accuracy'])
+      input = Input(shape=(8, 8, 6), name='board_state')
+      model = Conv2D(filters=64, kernel_size=[5,5], padding='same', activation='relu')(input)
+      for _ in range(num_conv_layers - 1):
+        model = Conv2D(filters=128, kernel_size=[3,3], padding='same', activation='relu')(model)
+      model = Flatten()(model)
+      model = Dropout(0.9)(model)
+      policy = Dense(bt.ACTIONS, activation='softmax', name='policy')(model)
+      value = Dense(1, activation='tanh', name='reward')(model)
+
+      self._model = Model(inputs=[input], outputs=[policy, value])
+
+  def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40):
+    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(lr=0.001), metrics=['accuracy'])
     history = self._model.fit(train_states,
-                              train_action_probs,
-                              validation_data=(eval_states, eval_action_probs),
+                              [train_action_probs, train_rewards],
+                              validation_data=(eval_states, [eval_action_probs, eval_rewards]),
                               epochs=epochs,
                               batch_size=1024,
                               callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
                                          ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
-                                         ReduceLROnPlateau(monitor='val_acc', factor=0.3, patience=3, verbose=1)])
+                                         ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
         
   def convert_state(self, state, nn_input=np.empty((8, 8, 6), dtype=nn.DATA_TYPE)):
     # 6-channel 8x8 network
