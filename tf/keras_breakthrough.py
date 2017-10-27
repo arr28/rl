@@ -83,11 +83,15 @@ def predict():
     trial_state = bt.Breakthrough(state, bt.convert_index_to_move(index, state.player))
     greedy_win = rollout(policy, trial_state, greedy=True) == desired_reward
     win_rate = evaluate_for(trial_state, policy, state.player)
-    log("Play %s with probability %f (%s) for win rate %d%%" % 
+    state_value = policy.get_state_value(trial_state)
+    if state.player == 1:
+      state_value = 1 - state_value
+    log("Play %s with probability %f (%s) for win rate %d%% and state-value %d%%" % 
         (convert_index_to_move(index, state.player), 
          prediction[index], 
          '*' if greedy_win else '!',
-         int(win_rate * 100)))
+         int(win_rate * 100),
+         int(state_value * 100)))
     
   _ = input('Press enter to play on')
   rollout(policy, state, greedy=True, show=True)
@@ -118,7 +122,7 @@ def get_best_legal(state, policy):
     legal = state.is_legal(bt.convert_index_to_move(index, state.player))
   return index
   
-def evaluate_for(initial_state, policy, player, num_rollouts=1000):
+def evaluate_for(initial_state, policy, player, num_rollouts=100):
   states = [bt.Breakthrough(initial_state) for _ in range(num_rollouts)]
   
   move_made = True
