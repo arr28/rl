@@ -10,6 +10,7 @@ from __future__ import print_function
 import breakthrough as bt
 from ggp import run_ggp
 import little_golem as lg
+import mcts
 import nn
 import numpy as np
 import os
@@ -179,7 +180,11 @@ def shuffle_together(list1, list2, list3):
   np.random.shuffle(list2)
   np.random.set_state(rng_state)
   np.random.shuffle(list3)
-    
+
+def reinforce():
+  policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  mcts.MCTSTrainer(policy).iterate(num_iterations=2)
+      
 def ggp():
   run_ggp()
   
@@ -187,9 +192,11 @@ def main(argv):
   quit = False
   while not quit:
     log('', end='')
-    cmd = input("** Running with Keras **  Train (t), predict (p), GGP (g) or quit (q)? ").lower()
+    cmd = input("** Running with Keras **  Train (t), reinforce (r), predict (p), GGP (g) or quit (q)? ").lower()
     if cmd == 'train' or cmd == 't':
       train()
+    elif cmd == 'reinforce' or cmd == 'r':
+      reinforce()
     elif cmd == 'predict' or cmd == 'p':
       predict()
     if cmd == 'ggp' or cmd == 'g':
