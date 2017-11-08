@@ -3,8 +3,14 @@ from __future__ import division
 from __future__ import print_function
 
 import breakthrough as bt
+import little_golem as lg
 import math
 import nn
+
+from logger import log
+
+EXPLORATION_FACTOR = 5.0 # c{puct} in the paper.  They don't specify a value.  But the previous AlphaGo paper
+                         # used 5.
 
 class MCTSTrainer:
   def __init__(self, policy):
@@ -13,7 +19,7 @@ class MCTSTrainer:
     self.root_node.evaluate(bt.Breakthrough(), policy)
     
   def iterate(self, state=bt.Breakthrough(), num_iterations=1):
-    
+
     for _ in range(num_iterations):
       # Get the root state and node
       match_state = bt.Breakthrough(state)
@@ -30,9 +36,11 @@ class MCTSTrainer:
       # Get the value of the leaf and back it up
       value = node.value
       while (node.parent_edge is not None):
-        parent_edge.backup(value)
-        node = parent_edge.parent
+        node.parent_edge.backup(value)
+        node = node.parent_edge.parent
         value *= -1.0
+    
+    self.root_node.dump_stats(state)
         
 class Node:
   
@@ -41,6 +49,7 @@ class Node:
     self.terminal = False
     self.evaluated = False
     self.parent_edge = parent_edge
+    self.edges = []
 
   '''
   Select the most promising child node to explore next, creating one as required.
@@ -68,15 +77,24 @@ class Node:
     
     # Calculate the value of this node to the player who moved last
     if (self.terminal):
-      # Game always ends in a win for the player who moved last
-      self.value = 1
+      # Breakthrough always ends in a win for the player who moved last
+      self.value = 1.0
     else:
       # Get the policy's estimate of the value.
       # !! Change training data so that state-value is from p.o.v. of player that moved last
       # !! Change training data so that it's in the range [-1, +1].
       self.value = policy.get_state_value(match_state)
+      action_priors = policy.get_action_probs(match_state) # !! Do these two together
       
-    # !! Calculate children
+      # Create edges for all the legal moves, including the priors
+      for index, prior in enumerate(action_priors):
+        action = bt.convert_index_to_move(index, match_state.player)
+        if match_state.is_legal(action):
+          self.edges.append(Edge(self, action, prior))
+          
+  def dump_stats(self, state):
+    for edge in self.edges:
+      edge.dump_stats(state, self.total_child_visits)
 
 class Edge:
   
@@ -96,3 +114,6 @@ class Edge:
   def backup(self, value):
     self.total_value += value
     self.average_value = self.total_value / self.visits
+    
+  def dump_stats(self, state, total_visits):
+    log('%s: N=%d, W=%f, Q=%f, P=%f, pi=%f' % (lg.encode_move(self.action), self.visits, self.total_value, self.average_value, self.prior, float(self.visits) / float(total_visits)))
