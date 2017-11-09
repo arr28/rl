@@ -34,7 +34,7 @@ class MCTSTrainer:
         node.evaluate(match_state, self.policy)
   
       # Get the value of the leaf and back it up
-      value = node.value
+      value = node.prior
       while (node.parent_edge is not None):
         node.parent_edge.backup(value)
         node = node.parent_edge.parent
@@ -46,6 +46,7 @@ class Node:
   
   def __init__(self, parent_edge):
     self.total_child_visits = 0
+    self.total_child_value = 0.0
     self.terminal = False
     self.evaluated = False
     self.parent_edge = parent_edge
@@ -78,10 +79,10 @@ class Node:
     # Calculate the value of this node to the player who moved last
     if (self.terminal):
       # Breakthrough always ends in a win for the player who moved last
-      self.value = 1.0
+      self.prior = 1.0
     else:
       # Get the policy's estimate of the value.
-      self.value = policy.get_state_value(match_state)
+      self.prior = policy.get_state_value(match_state)
       action_priors = policy.get_action_probs(match_state) # !! Do these two together
       
       # Create edges for all the legal moves and record the priors
@@ -91,6 +92,7 @@ class Node:
           self.edges.append(Edge(self, action, prior))
           
   def dump_stats(self, state):
+    log('Node prior = % 2.4f and visit-weighted average child value = % 2.4f' % (self.prior, (self.total_child_value / self.total_child_visits)))
     for edge in self.edges:
       edge.dump_stats(state, self.total_child_visits)
 
@@ -112,6 +114,7 @@ class Edge:
   def backup(self, value):
     self.total_value += value
     self.average_value = self.total_value / self.visits
+    self.parent.total_child_value += value
     
   def dump_stats(self, state, total_visits):
-    log('%s: N=%4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), self.visits, self.child.value, self.average_value, self.prior, float(self.visits) / float(total_visits)))
+    log('%s: N = %4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), self.visits, self.child.prior, self.average_value, self.prior, float(self.visits) / float(total_visits)))
