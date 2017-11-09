@@ -84,7 +84,7 @@ class Node:
       self.value = policy.get_state_value(match_state)
       action_priors = policy.get_action_probs(match_state) # !! Do these two together
       
-      # Create edges for all the legal moves, including the priors
+      # Create edges for all the legal moves and record the priors
       for index, prior in enumerate(action_priors):
         action = bt.convert_index_to_move(index, match_state.player)
         if match_state.is_legal(action):
@@ -114,4 +114,4 @@ class Edge:
     self.average_value = self.total_value / self.visits
     
   def dump_stats(self, state, total_visits):
-    log('%s: N=%d, W=%f, Q=%f, P=%f, pi=%f' % (lg.encode_move(self.action), self.visits, self.total_value, self.average_value, self.prior, float(self.visits) / float(total_visits)))
+    log('%s: N=%4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), self.visits, self.child.value, self.average_value, self.prior, float(self.visits) / float(total_visits)))
