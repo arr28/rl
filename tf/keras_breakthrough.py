@@ -85,8 +85,6 @@ def predict():
     greedy_win = rollout(policy, trial_state, greedy=True) == desired_reward
     win_rate = evaluate_for(trial_state, policy, state.player)
     state_value = policy.get_state_value(trial_state)
-    if state.player == 1:
-      state_value = 1 - state_value
     log("Play %s with probability %f (%s) for win rate %d%% and state-value %d%%" % 
         (convert_index_to_move(index, state.player), 
          prediction[index], 
