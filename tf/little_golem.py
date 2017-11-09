@@ -55,12 +55,15 @@ def load_data(min_rounds=20):
     match = result_matcher.match(line)
     if match:
       result_good = True
-      result = match.group(1)
+      result = float(match.group(1)) * 2.0 - 1.0 # Scaled to [-1,+1]
+      # Results in the match record are always from the p.o.v. of the player who moved first.  For our training example, we want them from the p.o.v. of the player that
+      # just played (in any given state).  In the root state, we consider the 2nd player to have just played, therefore switch the result.
+      result *= -1.0
       
     round_marker = str(min_rounds) + '.'  
     if line.startswith('1.') and round_marker in line and white_good and black_good and result_good:
       num_matches += 1
-      match = bt.Breakthrough()
+      state = bt.Breakthrough()
       for part in line.split(' '):
         if len(part) == 5:
           num_moves += 1
@@ -69,18 +72,19 @@ def load_data(min_rounds=20):
           move = decode_move(part)
 
           # Add a training example
-          if match in data:
+          if state in data:
             num_duplicate_hits += 1
-            state_hits[match] += 1
+            state_hits[state] += 1
           else:
-            state_hits[match] = 1
-            data[match] = np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE)
-            rewards[match] = 0.0
-          data[match][bt.convert_move_to_index(move)] += 1
-          rewards[match] += float(result)
+            state_hits[state] = 1
+            data[state] = np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE)
+            rewards[state] = 0.0
+          data[state][bt.convert_move_to_index(move)] += 1
+          rewards[state] += result
 
           # Process the move to get the new state
-          match = bt.Breakthrough(match, move)
+          state = bt.Breakthrough(state, move)
+          result *= -1.0
 
   print('')
   log('  Loaded %d moves from %d matches (avg. %d moves/match) with %d duplicate hits' % 

@@ -81,8 +81,6 @@ class Node:
       self.value = 1.0
     else:
       # Get the policy's estimate of the value.
-      # !! Change training data so that state-value is from p.o.v. of player that moved last
-      # !! Change training data so that it's in the range [-1, +1].
       self.value = policy.get_state_value(match_state)
       action_priors = policy.get_action_probs(match_state) # !! Do these two together
       

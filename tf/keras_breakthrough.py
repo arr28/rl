@@ -92,7 +92,7 @@ def predict():
          prediction[index], 
          '*' if greedy_win else '!',
          int(win_rate * 100),
-         int(state_value * 100)))
+         int(state_value * 50) + 50)) # Scale from [-1,+1] to [0,100]
     
   _ = input('Press enter to play on')
   rollout(policy, state, greedy=True, show=True)
