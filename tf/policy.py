@@ -81,7 +81,7 @@ class CNPolicy:
   def get_state_value(self, state):
     predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))[1]
     for _, prediction in enumerate(predictions):
-      return prediction
+      return prediction[0]
     
   def _get_weighted_legal(self, state, action_probs):
     index = -1
