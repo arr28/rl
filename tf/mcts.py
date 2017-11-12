@@ -83,7 +83,7 @@ class Node:
   def select_and_expand(self, match_state):
     assert not self.terminal
     sqrt_visits = math.sqrt(self.total_child_visits)
-    score = lambda edge: edge.average_value + (EXPLORATION_FACTOR * edge.prior * sqrt_visits / (1 + edge.visits))
+    score = lambda edge: edge.average_value + (edge.prior * sqrt_visits / (edge.visits_plus_one))
     best_edge = max(self.edges, key=score)
     best_edge.visit()
     match_state.apply(best_edge.action)
@@ -132,19 +132,19 @@ class Edge:
     self.parent = parent
     self.action = action
     self.child = None
-    self.visits = 0
+    self.visits_plus_one = 1
     self.total_value = 0.0
     self.average_value = 0.0
-    self.prior = prior
+    self.prior = prior * EXPLORATION_FACTOR
     
   def visit(self):
-    self.visits += 1
+    self.visits_plus_one += 1
     self.parent.total_child_visits += 1
     
   def backup(self, value):
     self.total_value += value
-    self.average_value = self.total_value / self.visits
+    self.average_value = self.total_value / (self.visits_plus_one - 1)
     self.parent.total_child_value += value
     
   def dump_stats(self, state, total_visits):
-    log('%s: N = %4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), self.visits, self.child.prior, self.average_value, self.prior, float(self.visits) / float(total_visits)))
+    log('%s: N = %4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), (self.visits_plus_one - 1), self.child.prior, self.average_value, (self.prior / EXPLORATION_FACTOR), float(self.visits_plus_one - 1) / float(total_visits)))
