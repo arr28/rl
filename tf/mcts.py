@@ -11,6 +11,7 @@ from logger import log
 
 EXPLORATION_FACTOR = 5.0 # c{puct} in the paper.  They don't specify a value.  But the previous AlphaGo paper
                          # used 5.
+MCTS_ITERATION_BATCH_SIZE = 8
 
 class MCTSTrainer:
   def __init__(self, policy):
@@ -18,27 +19,48 @@ class MCTSTrainer:
     self.root_node = Node(None)
     self.root_node.evaluate(bt.Breakthrough(), policy)
     
-  def iterate(self, state=bt.Breakthrough(), num_iterations=1):
+  def iterate(self, state=bt.Breakthrough(), num_iterations=1600):
+    
+    num_batches = int(num_iterations / MCTS_ITERATION_BATCH_SIZE)
+    for _ in range(num_batches):      
+      # Perform a batch of MCTS iterations      
+      leaves = []
+      states = []
+      for _ in range(MCTS_ITERATION_BATCH_SIZE):
+        
+        # Get the root state and node
+        match_state = bt.Breakthrough(state)
+        node = self.root_node
+        
+        # Select down to a fresh leaf node
+        while (node.evaluated and not node.terminal):
+          node = node.select_and_expand(match_state)
 
-    for _ in range(num_iterations):
-      # Get the root state and node
-      match_state = bt.Breakthrough(state)
-      node = self.root_node
+        if node.terminal:
+          # Backup this value, since we already know it.
+          value = node.prior
+          while (node.parent_edge is not None):
+            node.parent_edge.backup(value)
+            node = node.parent_edge.parent
+            value *= -1.0
+        else:        
+          # Store the node for batch evaluation later.
+          leaves.append(node)
+          states.append(match_state)
       
-      # Select down to a fresh leaf node
-      while (node.evaluated and not node.terminal):
-        node = node.select_and_expand(match_state)
-      
-      # Evaluate the freshly created leaf node
-      if (not node.terminal):
-        node.evaluate(match_state, self.policy)
-  
-      # Get the value of the leaf and back it up
-      value = node.prior
-      while (node.parent_edge is not None):
-        node.parent_edge.backup(value)
-        node = node.parent_edge.parent
-        value *= -1.0
+      # Batch-evaluate all the new states
+      evaluations = self.policy.evaluate(states)
+
+      for ii in range(len(leaves)):
+        node = leaves[ii]
+        node.record_evaluation(states[ii], evaluations[0][ii], evaluations[1][ii][0])
+        
+        # Get the value of the leaf and back it up
+        value = node.prior
+        while (node.parent_edge is not None):
+          node.parent_edge.backup(value)
+          node = node.parent_edge.parent
+          value *= -1.0
     
     self.root_node.dump_stats(state)
         
@@ -69,26 +91,35 @@ class Node:
     if (best_edge.child is None):
       # Create a new child node for the selected edge.
       best_edge.child = Node(best_edge)
+      
+      # Mark the new node as terminal if necessary.
+      if match_state.terminated:
+        self.evaluated = True
+        self.terminal = True
+        # Breakthrough always ends in a win for the player who moved last.
+        self.prior = 1.0
      
     return best_edge.child
 
-  def evaluate(self, match_state, policy):
+  def record_evaluation(self, match_state, action_priors, state_prior):
     self.evaluated = True
-    self.terminal = match_state.terminated
-    
-    # Calculate the value of this node to the player who moved last
-    if (self.terminal):
-      # Breakthrough always ends in a win for the player who moved last
-      self.prior = 1.0
-    else:
-      # Get the policy's estimate of the value.
-      (self.prior, action_priors) = policy.evaluate(match_state)
-      
-      # Create edges for all the legal moves and record the priors
-      for index, prior in enumerate(action_priors):
-        action = bt.convert_index_to_move(index, match_state.player)
-        if match_state.is_legal(action):
-          self.edges.append(Edge(self, action, prior))
+    self.prior = state_prior
+
+    # Create edges for all the legal moves and record the priors.
+    for index, prior in enumerate(action_priors):
+      action = bt.convert_index_to_move(index, match_state.player)
+      if match_state.is_legal(action):
+        self.edges.append(Edge(self, action, prior))
+
+  '''
+  Evaluate this node.  Better to do batch evaluation where possible and then call record_evaluation.
+  '''
+  def evaluate(self, match_state, policy):
+    # Get the policy's estimate of the value.
+    states = []
+    states.append(match_state)
+    evaluation = policy.evaluate(states)
+    self.record_evaluation(match_state, evaluation[0][0], evaluation[1][0][0])
           
   def dump_stats(self, state):
     log('Node prior = % 2.4f and visit-weighted average child value = % 2.4f' % (self.prior, (self.total_child_value / self.total_child_visits)))
