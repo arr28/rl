@@ -8,16 +8,32 @@ import numpy as np
 ACTIONS = 8 * 8 * 3 # Not strictly true, but makes the conversion from move to index much simpler
 Z_HASHES = np.zeros((8, 8, 3), dtype=np.int64)
 ZERO_HASH = 0
+MOVE_TABLE = [[], []]
+
+def __convert_index_to_move(index, player):
+  dir = (index % 3) - 1
+  index = int(index / 3)
+  src_col = index % 8
+  src_row = int(index / 8)
+  dst_col = src_col + dir
+  dst_row = src_row + (1 if player == 0 else -1)
+  return (src_row, src_col, dst_row, dst_col)
 
 def __static_init():
   global Z_HASHES
   global ZERO_HASH
+  global MOVE_TABLE
   for row in range(8):
     for col in range(8):
       for val in range(3):
         Z_HASHES[row][col][val] = int(hashlib.sha1(b'r%dc%dv%d' % (row, col, val)).hexdigest()[:15], 16)
         if val == 0:
           ZERO_HASH ^= Z_HASHES[row][col][val]
+
+  # Pre-calculate the move-index to move mapping for efficiency  
+  for player in range(2):
+    for action in range(ACTIONS):
+      MOVE_TABLE[player].append(__convert_index_to_move(action, player))
 
 class Breakthrough:
        
@@ -149,10 +165,4 @@ def convert_move_to_index(move):
   return index
 
 def convert_index_to_move(index, player):
-  dir = (index % 3) - 1
-  index = int(index / 3)
-  src_col = index % 8
-  src_row = int(index / 8)
-  dst_col = src_col + dir
-  dst_row = src_row + (1 if player == 0 else -1)
-  return (src_row, src_col, dst_row, dst_col)
+  return MOVE_TABLE[player][index]
