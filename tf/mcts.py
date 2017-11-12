@@ -82,8 +82,7 @@ class Node:
       self.prior = 1.0
     else:
       # Get the policy's estimate of the value.
-      self.prior = policy.get_state_value(match_state)
-      action_priors = policy.get_action_probs(match_state) # !! Do these two together
+      (self.prior, action_priors) = policy.evaluate(match_state)
       
       # Create edges for all the legal moves and record the priors
       for index, prior in enumerate(action_priors):

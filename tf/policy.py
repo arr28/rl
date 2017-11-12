@@ -73,6 +73,10 @@ class CNPolicy:
     
     return nn_input
 
+  def evaluate(self, state):
+    predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))
+    return (predictions[1][0][0], predictions[0][0])
+
   def get_action_probs(self, state):
     predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))[0]
     for _, prediction in enumerate(predictions):
