@@ -19,7 +19,7 @@ class MCTSTrainer:
     self.root_node = Node(None)
     self.root_node.evaluate(bt.Breakthrough(), policy)
     
-  def iterate(self, state=bt.Breakthrough(), num_iterations=1600):
+  def iterate(self, state=bt.Breakthrough(), num_iterations=400):
     
     num_batches = int(num_iterations / MCTS_ITERATION_BATCH_SIZE)
     for _ in range(num_batches):      
@@ -147,4 +147,4 @@ class Edge:
     self.parent.total_child_value += value
     
   def dump_stats(self, state, total_visits):
-    log('%s: N = %4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), (self.visits_plus_one - 1), self.child.prior, self.average_value, (self.prior / EXPLORATION_FACTOR), float(self.visits_plus_one - 1) / float(total_visits)))
+    log('%s: N = %4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), (self.visits_plus_one - 1), self.child.prior if self.child else 0.0, self.average_value, (self.prior / EXPLORATION_FACTOR), float(self.visits_plus_one - 1) / float(total_visits)))

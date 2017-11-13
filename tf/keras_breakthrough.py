@@ -181,7 +181,7 @@ def shuffle_together(list1, list2, list3):
 
 def reinforce():
   policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  mcts.MCTSTrainer(policy).iterate(num_iterations=1600)
+  mcts.MCTSTrainer(policy).iterate()
       
 def ggp():
   run_ggp()
