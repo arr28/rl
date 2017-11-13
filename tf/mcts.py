@@ -18,7 +18,26 @@ class MCTSTrainer:
     self.policy = policy
     self.root_node = Node(None)
     self.root_node.evaluate(bt.Breakthrough(), policy)
+
+  def self_play(self):
+    match_state = bt.Breakthrough()
     
+    while not self.root_node.terminal:
+      print(match_state)
+
+      # Do MCTS iterations from the current root
+      self.iterate(state=match_state)
+
+      # !! Record the final stats as a training example
+
+      # Select a move and re-root the tree.
+      edge = self.root_node.best_edge()
+      self.root_node = edge.child
+      log('Playing %s' % (lg.encode_move(edge.action)))
+      match_state.apply(edge.action)
+
+    print(match_state)
+
   def iterate(self, state=bt.Breakthrough(), num_iterations=400):
     
     num_batches = int(num_iterations / MCTS_ITERATION_BATCH_SIZE)
@@ -94,12 +113,16 @@ class Node:
       
       # Mark the new node as terminal if necessary.
       if match_state.terminated:
-        self.evaluated = True
-        self.terminal = True
+        best_edge.child.evaluated = True
+        best_edge.child.terminal = True
         # Breakthrough always ends in a win for the player who moved last.
-        self.prior = 1.0
+        best_edge.child.prior = 1.0
      
     return best_edge.child
+
+  def best_edge(self):
+    num_visits = lambda edge: edge.visits_plus_one
+    return max(self.edges, key=num_visits)
 
   def record_evaluation(self, match_state, action_priors, state_prior):
     self.evaluated = True

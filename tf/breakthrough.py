@@ -132,7 +132,7 @@ class Breakthrough:
           pretty += '  '
       pretty += '\n'
     pretty += "  a b c d e f g h\n"
-    pretty += "Player %d to play\n" % (self.player + 1)
+    pretty += "Player %d to play (pieces %d vs %d%s)\n" % (self.player + 1, self.pieces[0], self.pieces[1], ", game over" if self.terminated else "")
     return pretty
 
   def __eq__(self, other):
