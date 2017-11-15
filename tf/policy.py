@@ -48,7 +48,11 @@ class CNPolicy:
                               callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
                                          ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
                                          ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
-        
+
+  def train_batch(self, train_states, train_action_probs, train_rewards, lr=0.001):
+    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(lr=lr), metrics=['accuracy'])
+    history = self._model.train_on_batch(train_states, [train_action_probs, train_rewards])
+
   def convert_state(self, state, nn_input=np.empty((8, 8, 6), dtype=nn.DATA_TYPE)):
     # 6-channel 8x8 network
     # 

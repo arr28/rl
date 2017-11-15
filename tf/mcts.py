@@ -6,6 +6,7 @@ import breakthrough as bt
 import little_golem as lg
 import math
 import nn
+import numpy as np
 
 from logger import log
 
@@ -20,8 +21,11 @@ class MCTSTrainer:
     self.root_node.evaluate(bt.Breakthrough(), policy)
 
   def self_play(self):
-    match_state = bt.Breakthrough()
+    match_states = []
+    match_action_probs = []
     
+    # Play a match
+    match_state = bt.Breakthrough()
     while not self.root_node.terminal:
       print(match_state)
 
@@ -29,14 +33,32 @@ class MCTSTrainer:
       self.iterate(state=match_state)
 
       # !! Record the final stats as a training example
+      action_probs = self.root_node.get_action_probs(match_state)
+      match_states.append(bt.Breakthrough(match_state))
+      match_action_probs.append(action_probs)
 
       # Select a move and re-root the tree.
       edge = self.root_node.best_edge()
       self.root_node = edge.child
       log('Playing %s' % (lg.encode_move(edge.action)))
       match_state.apply(edge.action)
-
     print(match_state)
+
+    # Do training
+    # !! Should really be concurrently on another thread
+
+    # Prepare the data
+    samples = len(match_states)
+    train_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
+    train_action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
+    train_rewards = np.empty((samples, 1), dtype=nn.DATA_TYPE)
+    for ii, state in enumerate(match_states):
+      self.policy.convert_state(state, train_states[ii:ii+1].reshape((8, 8, 6)))
+      np.copyto(train_action_probs[ii:ii+1].reshape(bt.ACTIONS), match_action_probs[ii])
+      train_rewards[ii] = 0.0 # !! Need the final reward from the p.o.v. of the player to play now
+
+    # Do the training step
+    self.policy.train_batch(train_states, train_action_probs, train_rewards)
 
   def iterate(self, state=bt.Breakthrough(), num_iterations=400):
     
@@ -148,6 +170,9 @@ class Node:
     log('Node prior = % 2.4f and visit-weighted average child value = % 2.4f' % (self.prior, (self.total_child_value / self.total_child_visits)))
     for edge in self.edges:
       edge.dump_stats(state, self.total_child_visits)
+
+  def get_action_probs(self, state):
+    return np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE) # !! Use the learned values
 
 class Edge:
   
