@@ -187,10 +187,10 @@ def shuffle_together(list1, list2, list3):
   np.random.shuffle(list3)
 
 def reinforce():
-  #policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  #original_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  policy = CNPolicy()
-  original_policy = CNPolicy()
+  policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  original_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  #policy = CNPolicy()
+  #original_policy = CNPolicy()
   mcts.MCTSTrainer(policy).self_play()
   log('Evaluating reinforced policy against original')
   win_rate = compare_policies_in_parallel(policy, original_policy)

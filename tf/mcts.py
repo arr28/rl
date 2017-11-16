@@ -20,7 +20,7 @@ class MCTSTrainer:
 
   def self_play(self, num_matches=10):    
     for ii in range(num_matches):
-      log('Starting match %d of %d' % (ii, num_matches))
+      log('Starting match %d of %d' % (ii + 1, num_matches))
       self.self_play_one_match()
       
   def self_play_one_match(self):
@@ -29,6 +29,7 @@ class MCTSTrainer:
     
     match_states = []
     match_action_probs = []
+    match_rewards = []
     
     # Play a match
     match_state = bt.Breakthrough()
@@ -38,10 +39,11 @@ class MCTSTrainer:
       # Do MCTS iterations from the current root
       self.iterate(state=match_state)
 
-      # !! Record the final stats as a training example
+      # Record the stats from the current root node as a training example
       action_probs = self.root_node.get_action_probs(match_state)
       match_states.append(bt.Breakthrough(match_state))
       match_action_probs.append(action_probs)
+      match_rewards.append(-self.root_node.total_child_value / self.root_node.total_child_visits)
 
       # Select a move and re-root the tree.
       edge = self.root_node.best_edge()
@@ -58,12 +60,12 @@ class MCTSTrainer:
     train_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
     train_action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
     train_rewards = np.empty((samples, 1), dtype=nn.DATA_TYPE)
-    reward = float(match_state.reward) * -1.0 # Reward from p.o.v. of player who moved last.  For initial state, this is player 2.
+    # reward = float(match_state.reward) * -1.0 # Reward from p.o.v. of player who moved last.  For initial state, this is player 2.
     for ii, state in enumerate(match_states):
       self.policy.convert_state(state, train_states[ii:ii+1].reshape((8, 8, 6)))
       np.copyto(train_action_probs[ii:ii+1].reshape(bt.ACTIONS), match_action_probs[ii])
-      train_rewards[ii] = reward
-      reward *= -1.0
+      train_rewards[ii] = match_rewards[ii]
+      # reward *= -1.0
 
     # Do the training step
     self.policy.train_batch(train_states, train_action_probs, train_rewards)
@@ -155,6 +157,8 @@ class Node:
     return max(self.edges, key=num_visits)
 
   def record_evaluation(self, match_state, action_priors, state_prior):
+    if self.evaluated:
+      return
     self.evaluated = True
     self.prior = state_prior
 
