@@ -17,10 +17,16 @@ MCTS_ITERATION_BATCH_SIZE = 8
 class MCTSTrainer:
   def __init__(self, policy):
     self.policy = policy
-    self.root_node = Node(None)
-    self.root_node.evaluate(bt.Breakthrough(), policy)
 
-  def self_play(self):
+  def self_play(self, num_matches=10):    
+    for ii in range(num_matches):
+      log('Starting match %d of %d' % (ii, num_matches))
+      self.self_play_one_match()
+      
+  def self_play_one_match(self):
+    self.root_node = Node(None)
+    self.root_node.evaluate(bt.Breakthrough(), self.policy)
+    
     match_states = []
     match_action_probs = []
     
@@ -52,10 +58,12 @@ class MCTSTrainer:
     train_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
     train_action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
     train_rewards = np.empty((samples, 1), dtype=nn.DATA_TYPE)
+    reward = float(match_state.reward) * -1.0 # Reward from p.o.v. of player who moved last.  For initial state, this is player 2.
     for ii, state in enumerate(match_states):
       self.policy.convert_state(state, train_states[ii:ii+1].reshape((8, 8, 6)))
       np.copyto(train_action_probs[ii:ii+1].reshape(bt.ACTIONS), match_action_probs[ii])
-      train_rewards[ii] = 0.0 # !! Need the final reward from the p.o.v. of the player to play now
+      train_rewards[ii] = reward
+      reward *= -1.0
 
     # Do the training step
     self.policy.train_batch(train_states, train_action_probs, train_rewards)
@@ -154,7 +162,7 @@ class Node:
     for index, prior in enumerate(action_priors):
       action = bt.convert_index_to_move(index, match_state.player)
       if match_state.is_legal(action):
-        self.edges.append(Edge(self, action, prior))
+        self.edges.append(Edge(self, action, index, prior))
 
   '''
   Evaluate this node.  Better to do batch evaluation where possible and then call record_evaluation.
@@ -172,13 +180,17 @@ class Node:
       edge.dump_stats(state, self.total_child_visits)
 
   def get_action_probs(self, state):
-    return np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE) # !! Use the learned values
+    action_probs = np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE)
+    for edge in self.edges:
+      action_probs[edge.action_index] = (edge.visits_plus_one - 1) / self.total_child_visits
+    return action_probs
 
 class Edge:
   
-  def __init__(self, parent, action, prior):
+  def __init__(self, parent, action, action_index, prior):
     self.parent = parent
     self.action = action
+    self.action_index = action_index
     self.child = None
     self.visits_plus_one = 1
     self.total_value = 0.0

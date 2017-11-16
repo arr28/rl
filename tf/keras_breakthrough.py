@@ -159,15 +159,22 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
         state.apply(bt.convert_index_to_move(action, state.player))
         move_made = True
       
-    # Now the it's the other player's turn, so swap policies.
+    # Now it's the other player's turn, so swap policies.
     current_policy, other_policy = other_policy, current_policy
 
   wins = 0
+  p0_wins = 0
+  p1_wins = 0
   for state in states[0::2]:
-    if state.reward == 1: wins += 1
+    if state.is_win_for(0):
+      wins += 1
+      p0_wins += 1
   for state in states[1::2]:
-    if state.reward == -1: wins += 1
+    if state.is_win_for(1):
+      wins += 1
+      p1_wins += 1
   
+  log('Wins, Wins as p0, Wins as p1 = %d, %d, %d' % (wins, p0_wins, p1_wins))
   return wins / num_matches
   
 ''' Shuffle a set of lists keeping matching indices aligned '''
@@ -180,8 +187,14 @@ def shuffle_together(list1, list2, list3):
   np.random.shuffle(list3)
 
 def reinforce():
-  policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  #policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  #original_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  policy = CNPolicy()
+  original_policy = CNPolicy()
   mcts.MCTSTrainer(policy).self_play()
+  log('Evaluating reinforced policy against original')
+  win_rate = compare_policies_in_parallel(policy, original_policy)
+  log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
       
 def ggp():
   run_ggp()
