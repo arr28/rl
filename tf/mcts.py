@@ -84,7 +84,7 @@ class MCTSTrainer:
         node = self.root_node
         
         # Select down to a fresh leaf node
-        while (node.evaluated and not node.terminal):
+        while (node.have_evaluation and not node.terminal):
           node = node.select_and_expand(match_state)
 
         if node.terminal:
@@ -121,6 +121,7 @@ class Node:
     self.total_child_visits = 0
     self.total_child_value = 0.0
     self.terminal = False
+    self.have_evaluation = False
     self.evaluated = False
     self.parent_edge = parent_edge
     self.edges = []
@@ -133,6 +134,18 @@ class Node:
   '''   
   def select_and_expand(self, match_state):
     assert not self.terminal
+
+    # Expansion of leaves delayed until here (i.e. when they're used)
+    if not self.evaluated:
+      # Create edges for all the legal moves and record the priors.
+      assert self.have_evaluation
+      for index, prior in enumerate(self.eval_action_priors):
+        action = bt.convert_index_to_move(index, match_state.player)
+        if match_state.is_legal(action):
+          self.edges.append(Edge(self, action, index, prior))
+      self.evaluated = True
+      self.eval_action_priors = None
+
     sqrt_visits = math.sqrt(self.total_child_visits)
     score = lambda edge: edge.average_value + (edge.prior * sqrt_visits / (edge.visits_plus_one))
     best_edge = max(self.edges, key=score)
@@ -145,6 +158,7 @@ class Node:
       
       # Mark the new node as terminal if necessary.
       if match_state.terminated:
+        best_edge.child.have_evaluation = True
         best_edge.child.evaluated = True
         best_edge.child.terminal = True
         # Breakthrough always ends in a win for the player who moved last.
@@ -157,16 +171,13 @@ class Node:
     return max(self.edges, key=num_visits)
 
   def record_evaluation(self, match_state, action_priors, state_prior):
-    if self.evaluated:
+    if self.have_evaluation:
       return
-    self.evaluated = True
+    self.have_evaluation = True
     self.prior = state_prior
 
-    # Create edges for all the legal moves and record the priors.
-    for index, prior in enumerate(action_priors):
-      action = bt.convert_index_to_move(index, match_state.player)
-      if match_state.is_legal(action):
-        self.edges.append(Edge(self, action, index, prior))
+    # Don't expand the edges just yet.  It's really expensive and isn't used for most nodes.     
+    self.eval_action_priors = action_priors
 
   '''
   Evaluate this node.  Better to do batch evaluation where possible and then call record_evaluation.
