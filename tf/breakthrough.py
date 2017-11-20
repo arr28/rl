@@ -17,6 +17,13 @@ def __convert_index_to_move(index, player):
   src_row = int(index / 8)
   dst_col = src_col + dir
   dst_row = src_row + (1 if player == 0 else -1)
+
+  # Set a marker for faster legal computation
+  if (src_row < 0 or src_row > 7 or
+      src_col < 0 or src_col > 7 or
+      dst_row < 0 or dst_row > 7 or
+      dst_col < 0 or dst_col > 7):
+    src_row = -1
   return (src_row, src_col, dst_row, dst_col)
 
 def __static_init():
@@ -101,11 +108,8 @@ class Breakthrough:
     # Must move own piece
     if (self.grid[src_row][src_col] != self.player): return False    
     
-    # Must stay on the board
-    if (src_row < 0 or src_row > 7 or
-        src_col < 0 or src_col > 7 or
-        dst_row < 0 or dst_row > 7 or
-        dst_col < 0 or dst_col > 7): return False
+    # Must stay on the board - this was pre-computed in __convert_index_to_move so we only need to check src_row.
+    if (src_row < 0): return False
     
     # If moving straight forwards, must move to empty square
     if ((src_col == dst_col) and (self.grid[dst_row][dst_col] != 2)): return False
