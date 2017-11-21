@@ -49,7 +49,7 @@ class GGPRequestHandler(BaseHTTPRequestHandler):
       response = 'ready'
     elif request.startswith('( PLAY '):
       parsed_play_req = re.match(r'\( PLAY [^ ]* (.*)', request)
-      # !! ARR Parse out the last move (remembering it might be NIL)
+      # Parse out the last move (remembering it's NIL at the start of the game)
       move = parsed_play_req.group(1)
       move = move.replace('noop', '').replace('move', '').replace('(', '').replace(')', '').replace(' ', '')
       if move != 'NIL':

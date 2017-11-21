@@ -39,7 +39,7 @@ class CNPolicy:
       self._model = Model(inputs=[input], outputs=[policy, value])
 
   def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40):
-    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(lr=0.001), metrics=['accuracy'])
+    self.compile(lr=0.001)
     history = self._model.fit(train_states,
                               [train_action_probs, train_rewards],
                               validation_data=(eval_states, [eval_action_probs, eval_rewards]),
@@ -49,8 +49,10 @@ class CNPolicy:
                                          ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
                                          ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
 
-  def train_batch(self, train_states, train_action_probs, train_rewards, lr=0.001):
+  def compile(self, lr):
     self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(lr=lr), metrics=['accuracy'])
+
+  def train_batch(self, train_states, train_action_probs, train_rewards):
     history = self._model.train_on_batch(train_states, [train_action_probs, train_rewards])
 
   def convert_state(self, state, nn_input=np.empty((8, 8, 6), dtype=nn.DATA_TYPE)):
@@ -128,4 +130,6 @@ class CNPolicy:
       else:      
         actions.append(self._get_weighted_legal(state, action_probs))
     return actions
-  
+
+  def save(self, filename="unnamed.hdf5"):
+    self._model.save(os.path.join(LOG_DIR, filename))

@@ -1,8 +1,3 @@
-# !! ARR Ideas for improvement
-#
-# - Add reflections to the dataset (being careful about interactions with deduplication)
-# - AlphaGo-Zero approach to reinforcement learning
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -187,12 +182,14 @@ def shuffle_together(list1, list2, list3):
   np.random.shuffle(list3)
 
 def reinforce():
-  policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  original_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  #policy = CNPolicy()
-  #original_policy = CNPolicy()
-  mcts.MCTSTrainer(policy).self_play()
+  #policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  policy = CNPolicy()
+  policy.compile(lr=0.01)
+  policy.save(filename='pre_reinforcement.hdf5')
+  mcts.MCTSTrainer(policy).self_play(num_matches=1)
+  policy.save(filename='post_reinforcement.hdf5')
   log('Evaluating reinforced policy against original')
+  original_policy = CNPolicy(checkpoint='pre_reinforcement.hdf5')
   win_rate = compare_policies_in_parallel(policy, original_policy)
   log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
       
