@@ -50,8 +50,7 @@ class CNPolicy:
                                          ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
 
   def compile(self, lr):
-    # !! ARR AGZ uses SGD with momentum (not Adam).
-    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(lr=lr), metrics=['accuracy'])
+    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=SGD(lr=lr, momentum=0.9), metrics=['accuracy'])
 
   def train_batch(self, train_states, train_action_probs, train_rewards):
     history = self._model.train_on_batch(train_states, [train_action_probs, train_rewards])
