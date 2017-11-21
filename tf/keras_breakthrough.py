@@ -184,7 +184,7 @@ def shuffle_together(list1, list2, list3):
 def reinforce():
   #policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
   policy = CNPolicy()
-  policy.compile(lr=0.01)
+  policy.compile(lr=0.001)
   policy.save(filename='pre_reinforcement.hdf5')
   mcts.MCTSTrainer(policy).self_play(num_matches=1)
   policy.save(filename='post_reinforcement.hdf5')
