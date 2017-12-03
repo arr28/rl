@@ -114,7 +114,12 @@ class MCTSTrainer:
           value *= -1.0
     
     self.root_node.dump_stats(state)
-        
+
+  # Used for direct evaluation outside of a training cycle
+  def prepare_for_eval(self, root_state):
+    self.root_node = Node(None)
+    self.root_node.evaluate(root_state, self.policy)
+              
 class Node:
   
   def __init__(self, parent_edge):
@@ -222,4 +227,4 @@ class Edge:
     self.parent.total_child_value += value
     
   def dump_stats(self, state, total_visits):
-    log('%s: N = %4d, V = % 2.4f, Q = % 2.4f, P = %2.4f, pi = %2.4f' % (lg.encode_move(self.action), (self.visits_plus_one - 1), self.child.prior if self.child else 0.0, self.average_value, (self.prior / EXPLORATION_FACTOR), float(self.visits_plus_one - 1) / float(total_visits)))
+    log('%s: Visits(N) = %5d, Prior Value(V) = % 2.4f, Value(Q) = % 2.4f, Prior Prob(P) = %2.4f, Prob(pi) = %2.4f' % (lg.encode_move(self.action), (self.visits_plus_one - 1), self.child.prior if self.child else 0.0, self.average_value, (self.prior / EXPLORATION_FACTOR), float(self.visits_plus_one - 1) / float(total_visits)))
