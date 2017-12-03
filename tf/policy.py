@@ -12,34 +12,45 @@ import tempfile
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.layers import Input, Conv2D, Dense, Dropout, Flatten
+from keras.metrics import top_k_categorical_accuracy
 from keras.models import Model, Sequential, load_model
 from keras.optimizers import SGD, Adam
+from keras.regularizers import l2
 from logger import log, log_progress
 
 LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 REINFORCEMENT_LEARNING_RATE = 0.0001
+L2_FACTOR = 1e-4 # AGZ paper has 1x10^-4 for weight regularization
 
 class CNPolicy:
   
-  def __init__(self, num_conv_layers=3, checkpoint=None):
+  def __init__(self, num_conv_layers=5, checkpoint=None):
     if checkpoint:
-      self._model = load_model(os.path.join(LOG_DIR, checkpoint))
+      self._model = load_model(os.path.join(LOG_DIR, checkpoint), custom_objects={'top_3_accuracy': top_3_accuracy})
     else:
       log('Creating model with functional API')
 
       input = Input(shape=(8, 8, 6), name='board_state')
-      model = Conv2D(filters=64, kernel_size=[5,5], padding='same', activation='relu')(input)
+      model = Conv2D(filters=64,
+                     kernel_size=[5,5],
+                     padding='same',
+                     activation='relu',
+                     kernel_regularizer=l2(L2_FACTOR))(input)
       for _ in range(num_conv_layers - 1):
-        model = Conv2D(filters=128, kernel_size=[3,3], padding='same', activation='relu')(model)
+        model = Conv2D(filters=128,
+                       kernel_size=[3,3],
+                       padding='same',
+                       activation='relu',
+                       kernel_regularizer=l2(L2_FACTOR))(model)
       model = Flatten()(model)
-      model = Dropout(0.9)(model)
-      policy = Dense(bt.ACTIONS, activation='softmax', name='policy')(model)
-      value = Dense(1, activation='tanh', name='reward')(model)
+      policy = Dropout(0.4)(model)
+      policy = Dense(bt.ACTIONS, activation='softmax', name='policy', kernel_regularizer=l2(L2_FACTOR))(policy)
+      value = Dense(1, activation='tanh', name='reward', kernel_regularizer=l2(L2_FACTOR))(model)
 
       self._model = Model(inputs=[input], outputs=[policy, value])
 
   def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40):
-    self.compile(lr=0.001)
+    self.compile(lr=0.007)
     history = self._model.fit(train_states,
                               [train_action_probs, train_rewards],
                               validation_data=(eval_states, [eval_action_probs, eval_rewards]),
@@ -50,7 +61,9 @@ class CNPolicy:
                                          ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
 
   def compile(self, lr):
-    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=SGD(lr=lr, momentum=0.9), metrics=['accuracy'])
+    self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
+                        optimizer=SGD(lr=lr, momentum=0.9),
+                        metrics=['accuracy']) # Adding top_3_accuracy causes lots of CPU use?
 
   def train_batch(self, train_states, train_action_probs, train_rewards):
     history = self._model.train_on_batch(train_states, [train_action_probs, train_rewards])
@@ -133,3 +146,6 @@ class CNPolicy:
 
   def save(self, filename="unnamed.hdf5"):
     self._model.save(os.path.join(LOG_DIR, filename))
+
+def top_3_accuracy(y_true, y_pred):
+    return top_k_categorical_accuracy(y_true, y_pred, k=3)
