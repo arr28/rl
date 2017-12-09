@@ -191,7 +191,7 @@ def reinforce():
   policy = CNPolicy()
   policy.compile(lr=0.01)
   policy.save(filename='pre_reinforcement.hdf5')
-  mcts.MCTSTrainer(policy).self_play(num_matches=80)
+  mcts.MCTSTrainer(policy).self_play()
   policy.save(filename='post_reinforcement.hdf5')
   log('Evaluating reinforced policy against original')
   original_policy = CNPolicy(checkpoint='pre_reinforcement.hdf5')
