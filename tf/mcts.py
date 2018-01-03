@@ -20,6 +20,86 @@ class MCTSTrainer:
     self.policy = policy
     self.training_db = TrainingDB(policy)
 
+  def new_self_play(self, num_matches=20000, num_rollouts=1600):
+    # Get a batch of states to evaluate fully.
+    log('Getting sample states')
+    sampled_states = self.pick_states(num_matches=num_matches)
+
+    for ii, state in enumerate(sampled_states):
+      log('Evaluating state %d / %d' % (ii + 1, num_matches))
+      print(state)
+
+      # Create a new MCTS tree.
+      self.root_node = Node(None)
+      self.root_node.evaluate(bt.Breakthrough(state), self.policy)
+
+      # Do PUCT for the chosen state.
+      self.iterate(state=state, num_iterations=num_rollouts)
+
+      # Add the sample to the database.      
+      action_probs = self.root_node.get_action_probs()
+      reward = self.estimate_state_value(state, action_probs, num_matches=10)
+      log('Reward (for previous player) = % 2.4f' % (reward))
+      self.training_db.add(state, action_probs, reward)
+
+    # Perform a training cycle
+    self.training_db.train()
+
+  '''
+    Pick a set of states to evaluate in detail.
+  '''
+  def pick_states(self, num_matches=100):
+    # Run a set of matches, recording all states encountered.
+    matches = [bt.Breakthrough() for _ in range(num_matches)]
+    all_states = [[] for _ in range(num_matches)]
+
+    move_made = True
+    while move_made:
+      # Compute the next move for each game in parallel.
+      move_made = False    
+      for ii, (match_state, action) in enumerate(zip(matches, self.policy.get_action_indicies(matches))):
+        if not match_state.terminated:
+          all_states[ii].append(bt.Breakthrough(match_state))
+          match_state.apply(bt.convert_index_to_move(action, match_state.player))
+          move_made = True
+
+    # Choose a single state from each match.    
+    return [random.choice(all_states[ii]) for ii in range(num_matches)]
+
+  '''
+    Evaluate a state (from the p.o.v. of the player who moved last).
+  '''
+  def estimate_state_value(self, root_state, root_action_probs, num_matches=100):
+    # Do parallel rollouts.
+    states = [bt.Breakthrough(root_state) for _ in range(num_matches)]
+
+    # Make the 1st move according to the supplied probabilities.
+    for state in states:
+      action = np.random.choice(bt.ACTIONS, p=root_action_probs)
+      state.apply(bt.convert_index_to_move(action, state.player))
+
+    # Thereafter, use the current policy.
+    move_made = True
+    while move_made:
+      # Compute the next move for each game in parallel.
+      move_made = False    
+      for (state, action) in zip(states, self.policy.get_action_indicies(states)):
+        if not state.terminated:
+          state.apply(bt.convert_index_to_move(action, state.player))
+          move_made = True
+
+    # Return result from the p.o.v. of the player who played before the root state.
+    total = 0
+    for state in states:
+      if state.is_win_for(root_state.player):
+        total -= 1
+      else:
+        total += 1
+    return total / num_matches
+
+
+  # --------------------------- Old code starts here -------------------------------------
+  
   def self_play(self, num_batches=10, batch_size=10):
     # In each batch of play, play some matches and then do some training.
     for ii in range(num_batches):
@@ -31,7 +111,7 @@ class MCTSTrainer:
 
       # Perform a training cycle
       self.training_db.train()
-      
+
   def self_play_one_match(self):
     self.root_node = Node(None)
     self.root_node.evaluate(bt.Breakthrough(), self.policy)
@@ -42,14 +122,14 @@ class MCTSTrainer:
     # Play a match.
     match_state = bt.Breakthrough()
     while not self.root_node.terminal:
-      #print(match_state)
+      print(match_state)
 
       # Do MCTS iterations from the current root.
       self.iterate(state=match_state)
 
       # Record the stats from the current root node as a training example.  The match result (when known) will be used for the reward head
       # because it is an unbiased estimate of the policy.
-      action_probs = self.root_node.get_action_probs(match_state)
+      action_probs = self.root_node.get_action_probs()
       match_states.append(bt.Breakthrough(match_state))
       match_action_probs.append(action_probs)
       # match_rewards.append(-self.root_node.total_child_value / self.root_node.total_child_visits)
@@ -67,7 +147,7 @@ class MCTSTrainer:
       self.training_db.add(state, match_action_probs[ii], reward)
       reward *= -1.0
 
-  def iterate(self, state=bt.Breakthrough(), num_iterations=400):
+  def iterate(self, state=bt.Breakthrough(), num_iterations=1600):
     
     num_batches = int(num_iterations / MCTS_ITERATION_BATCH_SIZE)
     for _ in range(num_batches):      
@@ -110,7 +190,7 @@ class MCTSTrainer:
           node = node.parent_edge.parent
           value *= -1.0
     
-    #self.root_node.dump_stats(state)
+    self.root_node.dump_stats(state)
 
   # Used for direct evaluation outside of a training cycle.
   def prepare_for_eval(self, root_state):
@@ -207,7 +287,7 @@ class Node:
     for edge in self.edges:
       edge.dump_stats(state, self.total_child_visits)
 
-  def get_action_probs(self, state):
+  def get_action_probs(self):
     action_probs = np.zeros((bt.ACTIONS), dtype=nn.DATA_TYPE)
     for edge in self.edges:
       action_probs[edge.action_index] = (edge.visits_plus_one - 1) / self.total_child_visits
@@ -246,28 +326,31 @@ class TrainingDB:
     self.states = []
     self.reward = {}
     self.action_probs = {}
+    self._num_samples = 0
 
   def add(self, state, action_probs, reward):
     if not state in self.reward:
       self.states.append(state)
+      self._num_samples += 1
     else:
       log('Updating existing sample')
 
     self.reward[state] = reward
     self.action_probs[state] = action_probs
 
-  def train(self, samples=512):
+  def train(self):
     # Create input space in the required format.
-    train_states = np.empty((samples, 8, 8, 6), dtype=nn.DATA_TYPE)
-    train_action_probs = np.empty((samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
-    train_rewards = np.empty((samples, 1), dtype=nn.DATA_TYPE)
+    train_states = np.empty((self._num_samples, 8, 8, 6), dtype=nn.DATA_TYPE)
+    train_action_probs = np.empty((self._num_samples, bt.ACTIONS), dtype=nn.DATA_TYPE)
+    train_rewards = np.empty((self._num_samples, 1), dtype=nn.DATA_TYPE)
 
-    # Sample the database randomly, by shuffling the states and taking the first N.
-    np.random.shuffle(self.states)
-    for ii, state in enumerate(self.states[:samples]):
+    # Copy the data in.
+    for ii, state in enumerate(self.states):
       self.policy.convert_state(state, train_states[ii:ii+1].reshape((8, 8, 6)))
       np.copyto(train_action_probs[ii:ii+1].reshape(bt.ACTIONS), self.action_probs[state])
       train_rewards[ii] = self.reward[state]
 
     # Do the training.
-    self.policy.train_batch(train_states, train_action_probs, train_rewards)
+    log('About to train with %d rewards...' % (self._num_samples))
+    log(train_rewards)
+    self.policy.train(train_states, train_action_probs, train_rewards, None, None, None, epochs=200, lr=0.007)

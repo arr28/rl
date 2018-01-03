@@ -17,6 +17,7 @@ from keras.models import Model, Sequential, load_model
 from keras.optimizers import SGD, Adam
 from keras.regularizers import l2
 from logger import log, log_progress
+from math import isnan
 
 LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 REINFORCEMENT_LEARNING_RATE = 0.0001
@@ -49,16 +50,25 @@ class CNPolicy:
 
       self._model = Model(inputs=[input], outputs=[policy, value])
 
-  def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40):
-    self.compile(lr=0.007)
-    history = self._model.fit(train_states,
-                              [train_action_probs, train_rewards],
-                              validation_data=(eval_states, [eval_action_probs, eval_rewards]),
-                              epochs=epochs,
-                              batch_size=1024,
-                              callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
-                                         ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
-                                         ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
+  def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40, lr=0.007):
+    self.compile(lr=lr)
+    if eval_states is not None:
+      history = self._model.fit(train_states,
+                                [train_action_probs, train_rewards],
+                                validation_data=(eval_states, [eval_action_probs, eval_rewards]),
+                                epochs=epochs,
+                                batch_size=1024,
+                                callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
+                                           ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
+                                           ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
+    else:
+      history = self._model.fit(train_states,
+                                [train_action_probs, train_rewards],
+                                validation_split=0.2,
+                                epochs=epochs,
+                                batch_size=1024,
+                                callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
+                                           ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'no_val.epoch{epoch:02d}.hdf5'))])
 
   def compile(self, lr):
     self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
@@ -100,36 +110,52 @@ class CNPolicy:
 
   def get_action_probs(self, state):
     predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))[0]
-    for _, prediction in enumerate(predictions):
-      return prediction
+    return predictions[0]
     
   def get_state_value(self, state):
     predictions = self._model.predict(self.convert_state(state).reshape((1, 8, 8, 6)))[1]
     for _, prediction in enumerate(predictions):
       return prediction[0]
     
-  def _get_weighted_legal(self, state, action_probs):
+  def get_weighted_legal(self, state, action_probs):
+    failed_attempts = 0
     index = -1
     legal = False
     while not legal:
       if index != -1:
         # Avoid picking this action again and re-normalise the probabilities.
+        failed_attempts += 1
         action_probs[index] = 0
         total_action_probs = action_probs.sum()
-        if total_action_probs == 0:
-          log('Oh dear - no legal action with any weight in state...')
+        if total_action_probs <= 0 or isnan(total_action_probs) or failed_attempts > 192:
+          orig_action_probs = self.get_action_probs(state)
+          orig_best = np.argmax(orig_action_probs)
+          log('Oh dear - problem getting legal action in state...')
           print(state)
-          log('Action probabilities (after adjustment) are...')
+          log('Action probabilities (after %d adjustment(s)) are...' % (failed_attempts))
           log(action_probs)
+          log('Action probabilities (before adjustment) were...')
+          log(orig_action_probs)
+          log('Best original action was %s (%d)' % (lg.encode_move(bt.convert_index_to_move(orig_best, state.player)), orig_best))
           log('Last cleared action was %s (%d)' % (lg.encode_move(bt.convert_index_to_move(index, state.player)), index))
+          log('Total = %f' % (total_action_probs))
+          return self._first_legal_action(state)
         action_probs /= total_action_probs
       index = np.random.choice(bt.ACTIONS, p=action_probs)
       legal = state.is_legal(bt.convert_index_to_move(index, state.player))
     return index
     
+  def _first_legal_action(self, state):
+    for index in range(bt.ACTIONS):
+      if state.is_legal(bt.convert_index_to_move(index, state.player)):
+        return index
+    log('No legal action at all in state...')
+    print(state)
+    return -1
+
   def get_action_index(self, state):
     action_probs = self.get_action_probs(state)
-    return self._get_weighted_legal(state, action_probs)
+    return self.get_weighted_legal(state, action_probs)
   
   def get_action_indicies(self, states):
     batch_input = np.empty((len(states), 8, 8, 6), dtype=nn.DATA_TYPE)
@@ -141,7 +167,7 @@ class CNPolicy:
       if state.terminated:
         actions.append(-1)
       else:      
-        actions.append(self._get_weighted_legal(state, action_probs))
+        actions.append(self.get_weighted_legal(state, action_probs))
     return actions
 
   def save(self, filename="unnamed.hdf5"):

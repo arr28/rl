@@ -87,10 +87,10 @@ def predict():
          int(win_rate * 100),
          int(state_value * 50) + 50)) # Scale from [-1,+1] to [0,100]
     
-  log('MCTS evaluation...')
-  tree = mcts.MCTSTrainer(policy)
-  tree.prepare_for_eval(state)
-  tree.iterate(state=state, num_iterations=50000)
+  #log('MCTS evaluation...')
+  #tree = mcts.MCTSTrainer(policy)
+  #tree.prepare_for_eval(state)
+  #tree.iterate(state=state, num_iterations=50000)
   
   _ = input('Press enter to play on')
   rollout(policy, state, greedy=True, show=True)
@@ -191,7 +191,8 @@ def reinforce():
   policy = CNPolicy()
   policy.compile(lr=0.01)
   policy.save(filename='pre_reinforcement.hdf5')
-  mcts.MCTSTrainer(policy).self_play()
+  # mcts.MCTSTrainer(policy).self_play()
+  mcts.MCTSTrainer(policy).new_self_play()
   policy.save(filename='post_reinforcement.hdf5')
   log('Evaluating reinforced policy against original')
   original_policy = CNPolicy(checkpoint='pre_reinforcement.hdf5')
