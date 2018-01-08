@@ -67,11 +67,11 @@ class CNPolicy:
                                 validation_split=0.2,
                                 epochs=epochs,
                                 batch_size=1024,
-                                callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
-                                           ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'no_val.epoch{epoch:02d}.hdf5'))])
+                                callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True)])
 
   def compile(self, lr):
     self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
+                        loss_weights=[1.0, 0.1],
                         optimizer=SGD(lr=lr, momentum=0.9),
                         metrics=['accuracy']) # Adding top_3_accuracy causes lots of CPU use?
 

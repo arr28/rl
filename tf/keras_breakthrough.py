@@ -174,7 +174,7 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
       wins += 1
       p1_wins += 1
   
-  log('Wins, Wins as p0, Wins as p1 = %d, %d, %d' % (wins, p0_wins, p1_wins))
+  # log('Wins, Wins as p0, Wins as p1 = %d, %d, %d' % (wins, p0_wins, p1_wins))
   return wins / num_matches
   
 ''' Shuffle a set of lists keeping matching indices aligned '''
@@ -188,17 +188,50 @@ def shuffle_together(list1, list2, list3):
 
 def reinforce():
   #policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  policy = CNPolicy()
-  policy.compile(lr=0.01)
-  policy.save(filename='pre_reinforcement.hdf5')
-  # mcts.MCTSTrainer(policy).self_play()
-  mcts.MCTSTrainer(policy).new_self_play()
-  policy.save(filename='post_reinforcement.hdf5')
-  log('Evaluating reinforced policy against original')
-  original_policy = CNPolicy(checkpoint='pre_reinforcement.hdf5')
-  win_rate = compare_policies_in_parallel(policy, original_policy)
-  log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
-      
+  policy = CNPolicy(checkpoint='gen_4.hdf5')
+  #policy = CNPolicy()
+  #policy.compile(lr=0.01)
+  old_name = 'gen_4.hdf5'
+  #policy.save(filename=old_name)
+  for generation in range(4, 10):
+    gen = generation + 1
+    log('Starting generation %d / 10' % (gen))
+    new_name = 'gen_%d.hdf5' % (gen)
+    mcts.MCTSTrainer(policy).new_self_play()
+    policy.save(filename=new_name)
+    log('Evaluating generation %d (%s) against previous (%s)' % (gen, new_name, old_name))
+    original_policy = CNPolicy(checkpoint=old_name)
+    old_name = new_name
+    win_rate = compare_policies_in_parallel(policy, original_policy)
+    log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
+  log('All generations complete')
+
+def real_compare():
+  current_policy = CNPolicy(checkpoint='gen_9.hdf5')
+  for old_gen in range(9):
+    old_policy = CNPolicy(checkpoint='gen_%d.hdf5' % (old_gen))
+    win_rate = compare_policies_in_parallel(current_policy, old_policy)
+    log('Current policy won %d%% of the matches against gen %d' % (int(win_rate * 100), old_gen))
+    
+  old_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
+  win_rate = compare_policies_in_parallel(current_policy, old_policy)
+  log('Current policy won %d%% of the matches against the expert policy' % (int(win_rate * 100)))
+
+def compare():    
+  for gen in range(10):
+    w1_policy = CNPolicy(checkpoint='w1\gen_%d.hdf5' % (gen))
+    w3_policy = CNPolicy(checkpoint='w3\gen_%d.hdf5' % (gen))
+    win_rate_3v1 = compare_policies_in_parallel(w3_policy, w1_policy, num_matches=1000)
+    log('Gen %d: 100-1 vs 1-1 = %d%%' % (gen, int(win_rate_3v1 * 100)))
+    
+  for gen in range(5):
+    w1_policy = CNPolicy(checkpoint='w1\gen_%d.hdf5' % (gen))
+    w2_policy = CNPolicy(checkpoint='w2\gen_%d.hdf5' % (gen))
+    w3_policy = CNPolicy(checkpoint='w3\gen_%d.hdf5' % (gen))
+    win_rate_3v2 = compare_policies_in_parallel(w3_policy, w2_policy, num_matches=1000)
+    win_rate_2v1 = compare_policies_in_parallel(w2_policy, w1_policy, num_matches=1000)
+    log('Gen %d: 100-1 vs 10-1 = %d%%, 10-1 vs 1-1 = %d%%' % (gen, int(win_rate_3v2 * 100), int(win_rate_2v1 * 100)))
+
 def ggp():
   run_ggp()
   
@@ -211,6 +244,8 @@ def main(argv):
       train()
     elif cmd == 'reinforce' or cmd == 'r':
       reinforce()
+    elif cmd == 'compare' or cmd == 'c':
+      compare()
     elif cmd == 'predict' or cmd == 'p':
       predict()
     if cmd == 'ggp' or cmd == 'g':

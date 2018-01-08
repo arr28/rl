@@ -20,14 +20,13 @@ class MCTSTrainer:
     self.policy = policy
     self.training_db = TrainingDB(policy)
 
-  def new_self_play(self, num_matches=20000, num_rollouts=1600):
+  def new_self_play(self, num_matches=10000, num_rollouts=1600):
     # Get a batch of states to evaluate fully.
     log('Getting sample states')
     sampled_states = self.pick_states(num_matches=num_matches)
 
     for ii, state in enumerate(sampled_states):
       log('Evaluating state %d / %d' % (ii + 1, num_matches))
-      print(state)
 
       # Create a new MCTS tree.
       self.root_node = Node(None)
@@ -39,7 +38,7 @@ class MCTSTrainer:
       # Add the sample to the database.      
       action_probs = self.root_node.get_action_probs()
       reward = self.estimate_state_value(state, action_probs, num_matches=10)
-      log('Reward (for previous player) = % 2.4f' % (reward))
+      # log('Reward (for previous player) = % 2.4f' % (reward))
       self.training_db.add(state, action_probs, reward)
 
     # Perform a training cycle
@@ -190,7 +189,7 @@ class MCTSTrainer:
           node = node.parent_edge.parent
           value *= -1.0
     
-    self.root_node.dump_stats(state)
+    # self.root_node.dump_stats(state)
 
   # Used for direct evaluation outside of a training cycle.
   def prepare_for_eval(self, root_state):
