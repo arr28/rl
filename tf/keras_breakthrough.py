@@ -206,25 +206,20 @@ def reinforce():
     log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
   log('All generations complete')
 
-def real_compare():
-  current_policy = CNPolicy(checkpoint='gen_9.hdf5')
-  for old_gen in range(9):
-    old_policy = CNPolicy(checkpoint='gen_%d.hdf5' % (old_gen))
-    win_rate = compare_policies_in_parallel(current_policy, old_policy)
-    log('Current policy won %d%% of the matches against gen %d' % (int(win_rate * 100), old_gen))
-    
-  old_policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  win_rate = compare_policies_in_parallel(current_policy, old_policy)
-  log('Current policy won %d%% of the matches against the expert policy' % (int(win_rate * 100)))
+def compare():
+  new_policy = CNPolicy(checkpoint='resnet_expert.hdf5')
+  old_policy = CNPolicy(checkpoint='expert.hdf5')
+  win_rate = compare_policies_in_parallel(new_policy, old_policy)
+  log('New policy won %d%% of the matches against the old policy' % (int(win_rate * 100)))
 
-def compare():    
+def weight_compare():    
   for gen in range(10):
     w1_policy = CNPolicy(checkpoint='w1\gen_%d.hdf5' % (gen))
     w3_policy = CNPolicy(checkpoint='w3\gen_%d.hdf5' % (gen))
     win_rate_3v1 = compare_policies_in_parallel(w3_policy, w1_policy, num_matches=1000)
     log('Gen %d: 100-1 vs 1-1 = %d%%' % (gen, int(win_rate_3v1 * 100)))
     
-  for gen in range(5):
+  for gen in range(8):
     w1_policy = CNPolicy(checkpoint='w1\gen_%d.hdf5' % (gen))
     w2_policy = CNPolicy(checkpoint='w2\gen_%d.hdf5' % (gen))
     w3_policy = CNPolicy(checkpoint='w3\gen_%d.hdf5' % (gen))

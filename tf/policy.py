@@ -11,13 +11,16 @@ import os
 import tempfile
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
-from keras.layers import Input, Conv2D, Dense, Dropout, Flatten
+from keras.layers import BatchNormalization, Conv2D, Dense, Dropout, Flatten, Input
+from keras.layers.merge import add
 from keras.metrics import top_k_categorical_accuracy
 from keras.models import Model, Sequential, load_model
 from keras.optimizers import SGD, Adam
 from keras.regularizers import l2
 from logger import log, log_progress
 from math import isnan
+from keras.layers.core import Activation
+from keras.layers.merge import add
 
 LOG_DIR = os.path.join(tempfile.gettempdir(), 'bt', 'keras')
 REINFORCEMENT_LEARNING_RATE = 0.0001
@@ -25,32 +28,78 @@ L2_FACTOR = 1e-4 # AGZ paper has 1x10^-4 for weight regularization
 
 class CNPolicy:
   
-  def __init__(self, num_conv_layers=5, checkpoint=None):
+  def __init__(self, num_conv_layers=3, checkpoint=None):
     if checkpoint:
       self._model = load_model(os.path.join(LOG_DIR, checkpoint), custom_objects={'top_3_accuracy': top_3_accuracy})
     else:
       log('Creating model with functional API')
 
+      num_filters = 32
+      value_hidden_size = 32
+      dropout_policy = 0.1
+      dropout_reward = 0.1
+      
+      # Start with the initial convolution block.
       input = Input(shape=(8, 8, 6), name='board_state')
-      model = Conv2D(filters=64,
-                     kernel_size=[5,5],
-                     padding='same',
-                     activation='relu',
-                     kernel_regularizer=l2(L2_FACTOR))(input)
+      model = Conv2D(filters=num_filters,
+                     kernel_size=[3,3],
+                     #kernel_regularizer=l2(L2_FACTOR),
+                     padding='same')(input)
+      model = BatchNormalization()(model)
+      model = Activation('relu')(model)
+                     
+      # Add the residual layers.
       for _ in range(num_conv_layers - 1):
-        model = Conv2D(filters=128,
+        stage_input = model
+        model = Conv2D(filters=num_filters,
                        kernel_size=[3,3],
-                       padding='same',
-                       activation='relu',
-                       kernel_regularizer=l2(L2_FACTOR))(model)
-      model = Flatten()(model)
-      policy = Dropout(0.4)(model)
-      policy = Dense(bt.ACTIONS, activation='softmax', name='policy', kernel_regularizer=l2(L2_FACTOR))(policy)
-      value = Dense(1, activation='tanh', name='reward', kernel_regularizer=l2(L2_FACTOR))(model)
+                       #kernel_regularizer=l2(L2_FACTOR),
+                       padding='same')(model)
+        model = BatchNormalization()(model)
+        model = Activation('relu')(model)
+        model = Conv2D(filters=num_filters,
+                       kernel_size=[3,3],
+                       #kernel_regularizer=l2(L2_FACTOR),
+                       padding='same')(model)
+        model = BatchNormalization()(model)
+        model = add([stage_input, model])
+        model = Activation('relu')(model)      
+      post_residual = model
+      
+      # Build the policy head.
+      policy = Conv2D(filters=2,
+                      kernel_size=[1,1],
+                      #kernel_regularizer=l2(L2_FACTOR),                      
+                      padding="same")(post_residual)
+      policy = BatchNormalization()(policy)
+      policy = Activation('relu')(policy)
+      policy = Flatten()(policy)
+      policy = Dropout(dropout_policy)(policy)
+      policy = Dense(bt.ACTIONS,
+                     #kernel_regularizer=l2(L2_FACTOR),
+                     activation='softmax',
+                     name='policy')(policy)
+      
+      # Build the reward head.
+      reward = Conv2D(filters=1,
+                      kernel_size=[1,1],
+                      #kernel_regularizer=l2(L2_FACTOR),
+                      padding="same")(post_residual)
+      reward = BatchNormalization()(reward)
+      reward = Activation('relu')(reward)
+      reward = Flatten()(reward)
+      reward = Dense(value_hidden_size,
+                     kernel_regularizer=l2(L2_FACTOR),
+                     activation='relu')(reward)
+      reward = Dropout(dropout_reward)(reward)
+      reward = Dense(1,
+                     #kernel_regularizer=l2(L2_FACTOR),
+                     activation='tanh',
+                     name='reward')(reward)
 
-      self._model = Model(inputs=[input], outputs=[policy, value])
+      self._model = Model(inputs=[input], outputs=[policy, reward])
 
-  def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40, lr=0.007):
+  def train(self, train_states, train_action_probs, train_rewards, eval_states, eval_action_probs, eval_rewards, epochs=40, lr=0.1):
     self.compile(lr=lr)
     if eval_states is not None:
       history = self._model.fit(train_states,
@@ -60,7 +109,7 @@ class CNPolicy:
                                 batch_size=1024,
                                 callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True),
                                            ModelCheckpoint(filepath=os.path.join(LOG_DIR, 'model.epoch{epoch:02d}.hdf5')),
-                                           ReduceLROnPlateau(monitor='val_policy_acc', factor=0.3, patience=3, verbose=1)])
+                                           ReduceLROnPlateau(monitor='val_policy_acc', factor=0.5, patience=5, verbose=1)])
     else:
       history = self._model.fit(train_states,
                                 [train_action_probs, train_rewards],
@@ -69,10 +118,15 @@ class CNPolicy:
                                 batch_size=1024,
                                 callbacks=[TensorBoard(log_dir=LOG_DIR, write_graph=True)])
 
-  def compile(self, lr):
+  def compile(self, lr, use_sgd=True):
+    if use_sgd:
+        optimizer = SGD(lr=lr, momentum=0.9)
+    else:
+        optimizer = Adam(lr=lr)
+
     self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
                         loss_weights=[1.0, 0.1],
-                        optimizer=SGD(lr=lr, momentum=0.9),
+                        optimizer=optimizer,
                         metrics=['accuracy']) # Adding top_3_accuracy causes lots of CPU use?
 
   def train_batch(self, train_states, train_action_probs, train_rewards):
