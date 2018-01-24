@@ -209,7 +209,7 @@ def reinforce():
 def compare():
   new_policy = CNPolicy(checkpoint='resnet_expert.hdf5')
   old_policy = CNPolicy(checkpoint='expert.hdf5')
-  win_rate = compare_policies_in_parallel(new_policy, old_policy)
+  win_rate = compare_policies_in_parallel(new_policy, old_policy, num_matches=1000)
   log('New policy won %d%% of the matches against the old policy' % (int(win_rate * 100)))
 
 def weight_compare():    
