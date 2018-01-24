@@ -28,17 +28,27 @@ L2_FACTOR = 1e-4 # AGZ paper has 1x10^-4 for weight regularization
 
 class CNPolicy:
   
-  def __init__(self, num_conv_layers=3, checkpoint=None):
+  def __init__(self, checkpoint=None):
     if checkpoint:
       self._model = load_model(os.path.join(LOG_DIR, checkpoint), custom_objects={'top_3_accuracy': top_3_accuracy})
     else:
       log('Creating model with functional API')
 
-      num_filters = 32
-      value_hidden_size = 32
-      dropout_policy = 0.1
-      dropout_reward = 0.1
-      
+      if True:
+        num_residual_layers = 4
+        num_filters = 32
+        value_hidden_size = 32
+        dropout_common = 0.05
+        dropout_policy = 0.05
+        dropout_reward = 0
+      else:
+        num_residual_layers = 8
+        num_filters = 112
+        value_hidden_size = 128
+        dropout_common = 0.05
+        dropout_policy = 0.05
+        dropout_reward = 0
+
       # Start with the initial convolution block.
       input = Input(shape=(8, 8, 6), name='board_state')
       model = Conv2D(filters=num_filters,
@@ -47,9 +57,10 @@ class CNPolicy:
                      padding='same')(input)
       model = BatchNormalization()(model)
       model = Activation('relu')(model)
+      model = Dropout(dropout_common)(model)
                      
       # Add the residual layers.
-      for _ in range(num_conv_layers - 1):
+      for _ in range(num_residual_layers):
         stage_input = model
         model = Conv2D(filters=num_filters,
                        kernel_size=[3,3],
@@ -57,6 +68,7 @@ class CNPolicy:
                        padding='same')(model)
         model = BatchNormalization()(model)
         model = Activation('relu')(model)
+        model = Dropout(dropout_common)(model)
         model = Conv2D(filters=num_filters,
                        kernel_size=[3,3],
                        #kernel_regularizer=l2(L2_FACTOR),
@@ -64,6 +76,7 @@ class CNPolicy:
         model = BatchNormalization()(model)
         model = add([stage_input, model])
         model = Activation('relu')(model)      
+        model = Dropout(dropout_common)(model)
       post_residual = model
       
       # Build the policy head.
@@ -73,8 +86,8 @@ class CNPolicy:
                       padding="same")(post_residual)
       policy = BatchNormalization()(policy)
       policy = Activation('relu')(policy)
-      policy = Flatten()(policy)
       policy = Dropout(dropout_policy)(policy)
+      policy = Flatten()(policy)
       policy = Dense(bt.ACTIONS,
                      #kernel_regularizer=l2(L2_FACTOR),
                      activation='softmax',
@@ -87,6 +100,7 @@ class CNPolicy:
                       padding="same")(post_residual)
       reward = BatchNormalization()(reward)
       reward = Activation('relu')(reward)
+      reward = Dropout(dropout_reward)(reward)
       reward = Flatten()(reward)
       reward = Dense(value_hidden_size,
                      kernel_regularizer=l2(L2_FACTOR),
@@ -125,7 +139,7 @@ class CNPolicy:
         optimizer = Adam(lr=lr)
 
     self._model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
-                        loss_weights=[1.0, 0.1],
+                        loss_weights=[1.0, 0.2],
                         optimizer=optimizer,
                         metrics=['accuracy']) # Adding top_3_accuracy causes lots of CPU use?
 
