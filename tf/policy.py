@@ -34,7 +34,7 @@ class CNPolicy:
     else:
       log('Creating model with functional API')
 
-      if False:
+      if True:
         num_residual_layers = 4
         num_filters = 32
         value_hidden_size = 32
