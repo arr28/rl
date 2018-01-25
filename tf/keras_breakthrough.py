@@ -174,7 +174,7 @@ def compare_policies_in_parallel(our_policy, their_policy, num_matches = 100):
       wins += 1
       p1_wins += 1
   
-  # log('Wins, Wins as p0, Wins as p1 = %d, %d, %d' % (wins, p0_wins, p1_wins))
+  log('Wins, Wins as p0, Wins as p1 = %d, %d, %d' % (wins, p0_wins, p1_wins))
   return wins / num_matches
   
 ''' Shuffle a set of lists keeping matching indices aligned '''

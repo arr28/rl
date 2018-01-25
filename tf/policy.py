@@ -45,8 +45,8 @@ class CNPolicy:
         num_residual_layers = 8
         num_filters = 112
         value_hidden_size = 128
-        dropout_common = 0.05
-        dropout_policy = 0.05
+        dropout_common = 0.15
+        dropout_policy = 0.15
         dropout_reward = 0
 
       # Start with the initial convolution block.
