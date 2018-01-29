@@ -10,23 +10,29 @@ import numpy as np
 import random
 
 from logger import log
+from tornado.testing import gen
+from re import purge
 
 EXPLORATION_FACTOR = 5.0 # c{puct} in the paper.  They don't specify a value.  But the previous AlphaGo paper
                          # used 5.
 MCTS_ITERATION_BATCH_SIZE = 8
 
 class MCTSTrainer:
-  def __init__(self, policy):
+  def __init__(self, policy, db):
     self.policy = policy
-    self.training_db = TrainingDB(policy)
+    self.training_db = db
 
-  def new_self_play(self, num_matches=10000, num_rollouts=1600):
+  def self_play(self, num_matches=5000, num_rollouts=1600):
     # Get a batch of states to evaluate fully.
     log('Getting sample states')
     sampled_states = self.pick_states(num_matches=num_matches)
 
     for ii, state in enumerate(sampled_states):
       log('Evaluating state %d / %d' % (ii + 1, num_matches))
+
+      if self.training_db.has_current_sample(state):
+        log('Skipping previously evaluated state')
+        continue
 
       # Create a new MCTS tree.
       self.root_node = Node(None)
@@ -38,7 +44,6 @@ class MCTSTrainer:
       # Add the sample to the database.      
       action_probs = self.root_node.get_action_probs()
       reward = self.estimate_state_value(state, action_probs, num_matches=10)
-      # log('Reward (for previous player) = % 2.4f' % (reward))
       self.training_db.add(state, action_probs, reward)
 
     # Perform a training cycle
@@ -96,55 +101,6 @@ class MCTSTrainer:
         total += 1
     return total / num_matches
 
-
-  # --------------------------- Old code starts here -------------------------------------
-  
-  def self_play(self, num_batches=10, batch_size=10):
-    # In each batch of play, play some matches and then do some training.
-    for ii in range(num_batches):
-
-      # Run a batch of matches
-      for jj in range(batch_size):
-        log('Starting match %d of %d in batch %d of %d' % (jj + 1, batch_size, ii + 1, num_batches))
-        self.self_play_one_match()
-
-      # Perform a training cycle
-      self.training_db.train()
-
-  def self_play_one_match(self):
-    self.root_node = Node(None)
-    self.root_node.evaluate(bt.Breakthrough(), self.policy)
-    
-    match_states = []
-    match_action_probs = []
-    
-    # Play a match.
-    match_state = bt.Breakthrough()
-    while not self.root_node.terminal:
-      print(match_state)
-
-      # Do MCTS iterations from the current root.
-      self.iterate(state=match_state)
-
-      # Record the stats from the current root node as a training example.  The match result (when known) will be used for the reward head
-      # because it is an unbiased estimate of the policy.
-      action_probs = self.root_node.get_action_probs()
-      match_states.append(bt.Breakthrough(match_state))
-      match_action_probs.append(action_probs)
-      # match_rewards.append(-self.root_node.total_child_value / self.root_node.total_child_visits)
-
-      # Select a move and re-root the tree.
-      edge = self.root_node.sample()
-      self.root_node = edge.child
-      log('Playing %s' % (lg.encode_move(edge.action)))
-      match_state.apply(edge.action)
-    print(match_state)
-
-    # Add the encountered positions to the training database.
-    reward = float(match_state.reward) * -1.0 # Reward from p.o.v. of player who moved last.  For initial state, this is player 2.
-    for ii, state in enumerate(match_states):
-      self.training_db.add(state, match_action_probs[ii], reward)
-      reward *= -1.0
 
   def iterate(self, state=bt.Breakthrough(), num_iterations=1600):
     
@@ -325,17 +281,43 @@ class TrainingDB:
     self.states = []
     self.reward = {}
     self.action_probs = {}
+
+    self._current_gen = 0
+    self._gen_of_state = {}
     self._num_samples = 0
+
+  def has_current_sample(self, state):
+    return self._gen_of_state.get(state) == self._current_gen
 
   def add(self, state, action_probs, reward):
     if not state in self.reward:
       self.states.append(state)
       self._num_samples += 1
     else:
-      log('Updating existing sample')
+      log('Overwriting sample from generation %d' % (self._gen_of_state[state]))
 
     self.reward[state] = reward
     self.action_probs[state] = action_probs
+    self._gen_of_state[state] = self._current_gen
+
+  def set_gen(self, generation):
+    # Set the new generation
+    self._current_gen = generation
+
+    # Purge any entries that are at least than 4 generations old
+    log('Database size was %d' % (len(self.states)))
+    purge_gen = generation - 4
+    ii = 0
+    while ii < len(self.states):
+      state = self.states[ii]
+      if self._gen_of_state[state] <= purge_gen:
+        del self.states[ii]
+        del self.reward[state]
+        del self.action_probs[state]
+        del self._gen_of_state[state]
+      else:
+        ii += 1
+    log('Database size is %d' % (len(self.states)))
 
   def train(self):
     # Create input space in the required format.
@@ -352,4 +334,4 @@ class TrainingDB:
     # Do the training.
     log('About to train with %d rewards...' % (self._num_samples))
     log(train_rewards)
-    self.policy.train(train_states, train_action_probs, train_rewards, None, None, None, epochs=200, lr=0.007)
+    self.policy.train(train_states, train_action_probs, train_rewards, None, None, None, epochs=100, lr=0.007)

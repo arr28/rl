@@ -103,7 +103,7 @@ class CNPolicy:
       reward = Dropout(dropout_reward)(reward)
       reward = Flatten()(reward)
       reward = Dense(value_hidden_size,
-                     kernel_regularizer=l2(L2_FACTOR),
+                     #kernel_regularizer=l2(L2_FACTOR),
                      activation='relu')(reward)
       reward = Dropout(dropout_reward)(reward)
       reward = Dense(1,

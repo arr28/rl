@@ -15,6 +15,7 @@ from logger import log, log_progress
 from policy import CNPolicy
 
 PRIMARY_CHECKPOINT = 'model.epoch99.hdf5'
+EXPERT_CHECKPOINT = 'expert.hdf5'
 
 def train():
   log('Creating policy')
@@ -187,27 +188,46 @@ def shuffle_together(list1, list2, list3):
   np.random.shuffle(list3)
 
 def reinforce():
-  #policy = CNPolicy(checkpoint=PRIMARY_CHECKPOINT)
-  policy = CNPolicy(checkpoint='gen_4.hdf5')
-  #policy = CNPolicy()
-  #policy.compile(lr=0.01)
-  old_name = 'gen_4.hdf5'
-  #policy.save(filename=old_name)
-  for generation in range(4, 10):
+  pickup_from_gen = 0
+  old_name = 'gen_%d.hdf5' % (pickup_from_gen)
+  if pickup_from_gen == 0:
+    policy = CNPolicy()
+    policy.compile(lr=0.1)
+    policy.save(filename=old_name)
+  else:
+    policy = CNPolicy(checkpoint=old_name)
+
+  db = mcts.TrainingDB(policy)
+  mcts_tree = mcts.MCTSTrainer(policy, db)
+
+  for generation in range(pickup_from_gen, 50):
+    db.set_gen(generation)
+
+    # Improve the policy via self-play.
     gen = generation + 1
     log('Starting generation %d / 10' % (gen))
     new_name = 'gen_%d.hdf5' % (gen)
-    mcts.MCTSTrainer(policy).new_self_play()
+    mcts_tree.self_play()
     policy.save(filename=new_name)
+
+    # Evaluate the improved policy.
     log('Evaluating generation %d (%s) against previous (%s)' % (gen, new_name, old_name))
     original_policy = CNPolicy(checkpoint=old_name)
-    old_name = new_name
-    win_rate = compare_policies_in_parallel(policy, original_policy)
+    win_rate = compare_policies_in_parallel(policy, original_policy, num_matches=1000)
     log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
+
+    log('Evaluating generation %d (%s) against expert policy' % (gen, new_name))
+    original_policy = CNPolicy(checkpoint=EXPERT_CHECKPOINT)
+    win_rate = compare_policies_in_parallel(policy, original_policy, num_matches=1000)
+    log('Reinforced policy won %d%% of the matches' % (int(win_rate * 100)))
+    
+    # Prepare to do it all again.
+    old_name = new_name
+    
   log('All generations complete')
 
 def compare():
-  new_policy = CNPolicy(checkpoint='resnet_expert.hdf5')
+  new_policy = CNPolicy(checkpoint='tmp.hdf5')
   old_policy = CNPolicy(checkpoint='expert.hdf5')
   win_rate = compare_policies_in_parallel(new_policy, old_policy, num_matches=1000)
   log('New policy won %d%% of the matches against the old policy' % (int(win_rate * 100)))
